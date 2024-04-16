@@ -29,8 +29,8 @@ def parse_args():
                         help='The b function to use in the simulation (b1_v or b2_v).')
     parser.add_argument('--local_gig_a', type=float, default=2, help='"a" parameter for the local GIG distribution.')
     parser.add_argument('--local_gig_b', type=float, default=0, help='"b" parameter for the local GIG distribution.')
-    parser.add_argument('--local_gig_a', type=float, default=1, help='"p" parameter for the local GIG distribution.')
-    parser.add_argument('--global_gig_p', type=float, default=2, help='"a" parameter for the global GIG distribution.')
+    parser.add_argument('--local_gig_p', type=float, default=1, help='"p" parameter for the local GIG distribution.')
+    parser.add_argument('--global_gig_a', type=float, default=2, help='"a" parameter for the global GIG distribution.')
     parser.add_argument('--global_gig_b', type=float, default=0, help='"b" parameter for the global GIG distribution.')
     parser.add_argument('--global_gig_p', type=float, default=1, help='"p" parameter for the global GIG distribution.')
     parser.add_argument('--kernel_name', type=str, default='gauss',
