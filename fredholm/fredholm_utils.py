@@ -10,7 +10,6 @@ def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_do
     """
     function for computing the matrix for estimate b_mat, over a particular linspace (usually for plotting/MSE calculation purposes)
     :param range_linspace:
-    :param betas:
     :param init_data:
     :param kernel:
     :param known_b:
@@ -105,14 +104,22 @@ class FredholmGlobLoc:
                  kernel_name = 'gauss',
                  gibbs_iters = 150,
                  t_delta = 0.05,
-                 local_gig_params = [2, 0, 1], #[0.5, 0, 2],
-                 global_gig_params = [2, 0, 1],
+                 a_loc = 2, #lambda
+                 b_loc = 0, #lambda
+                 p_loc = 1, #lambda
+                 a_glob = 2, #tau
+                 b_glob = 0, #tau
+                 p_glob = 1, #tau
                  int_N = 5000, #number of values to generate when numerically estimated the b integral
                  chunk_size=100
                  ):
-        self._local_gig_params = local_gig_params #typically, we'd want this to have a heavy tail (it is the form [a,b,p], default is [0.5,0,2], which has a large tail (but not much shrinkage))
-        self._global_gig_params = global_gig_params #typically, we'd want this to have high shrinkage (it is the form [a,b,p], default is the Lasso, which has high shrinkage)
-        self._init_data = init_data
+        self._local_gig_a = a_loc #desired low shrinkage
+        self._local_gig_b = b_loc
+        self._local_gig_p = p_loc
+        self._global_gig_a = a_glob #desired high shrinkage
+        self._global_gig_b = b_glob
+        self._global_gig_p = p_glob
+        self.init_data = init_data
         self._kernel = self._set_kernel(kernel_name)
         self.known_b = known_b
         self.y_domain = y_domain
@@ -178,11 +185,11 @@ class FredholmGlobLoc:
         # calculate the kernel for each of these y and z values together
         kern_vals = np.diag(self._kernel(y_z[:,0], y_z[:, 1]))
 
-        b_int = np.zeros((len(self._init_data) - 1, len(self._init_data) - 1))
+        b_int = np.zeros((len(self.init_data) - 1, len(self.init_data) - 1))
         # doing this as a loop first to make it easier to conceptualize
-        for i, xi in enumerate(self._init_data[:-1]):
-            if i%10 == 0: print(f'For B, at outer loop point {i+1}/{len(self._init_data)+1} in init_data')
-            for j, xj in enumerate(self._init_data[:-1]):
+        for i, xi in enumerate(self.init_data[:-1]):
+            if i%10 == 0: print(f'For B, at outer loop point {i+1}/{len(self.init_data)+1} in init_data')
+            for j, xj in enumerate(self.init_data[:-1]):
                 dy_b_result = self.known_b(xi, y_z[:,0])
                 dz_b_result = self.known_b(xj, y_z[:,1])
                 # if i==0: print(kern_vals.shape, dy_b_result.shape, dz_b_result.shape)
@@ -204,19 +211,19 @@ class FredholmGlobLoc:
 
         # Chunking init_data processing
         chunk_size = self.chunk_size
-        n_total = len(self._init_data) - 1
+        n_total = len(self.init_data) - 1
         N = self.int_N
         b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
         for start_idx_i in range(0, n_total, chunk_size):
             end_idx_i = min(start_idx_i + chunk_size, n_total)
-            b_y_chunk = self.known_b(np.asarray(self._init_data, dtype=np.float32)[start_idx_i:end_idx_i], y_z[:, 0]).astype(np.float32)
+            b_y_chunk = self.known_b(np.asarray(self.init_data, dtype=np.float32)[start_idx_i:end_idx_i], y_z[:, 0]).astype(np.float32)
             mb_y = b_y_chunk[:, np.newaxis, :]
 
             for start_idx_j in range(0, n_total, chunk_size):
                 end_idx_j = min(start_idx_j + chunk_size, n_total)
 
-                b_z_chunk = self.known_b(np.asarray(self._init_data, dtype=np.float32)[start_idx_j:end_idx_j], y_z[:, 1]).astype(np.float32)
+                b_z_chunk = self.known_b(np.asarray(self.init_data, dtype=np.float32)[start_idx_j:end_idx_j], y_z[:, 1]).astype(np.float32)
                 mb_z = b_z_chunk[np.newaxis, :, :]
 
                 b_chunk = mb_y * mb_z * kern_vals
@@ -230,12 +237,12 @@ class FredholmGlobLoc:
 
     #returns the variance matrix
     def get_diagonal_matrix(self):
-        data_len = len(self._init_data) -1
+        data_len = len(self.init_data) -1
         d_mat = np.identity(data_len)*1/self.diffusion**2
         return d_mat
 
     def get_eta(self, lambda_mat, tau):
-        eta = np.identity(len(self._init_data)-1)
+        eta = np.identity(len(self.init_data)-1)
         eta = eta*lambda_mat # elementwise multiplication to put lambda vals along the diagonal
         eta = eta*tau # since tau is a scalar this applies itself to the whole matrix (along the diag)
         return eta
@@ -246,8 +253,8 @@ class FredholmGlobLoc:
         return np.linalg.inv(c_inv) # return C by taking the inverse of c_inv
 
     def get_theta(self): #theta looks like a fancy "v" with a curl on the right side (for reference to the note)
-        constructor1 = np.asarray(self._init_data)[1:]
-        constructor2 = np.asarray(self._init_data)[:-1]
+        constructor1 = np.asarray(self.init_data)[1:]
+        constructor2 = np.asarray(self.init_data)[:-1]
         theta = constructor1 - constructor2
         return theta
 
@@ -257,16 +264,19 @@ class FredholmGlobLoc:
         return mu
 
     def run_gibbs(self, verbose=True, matrix_calc='chunked'):
-        #NOTE: _gig_params in order [a,b,p]
-        a_loc, b_loc, p_loc = self._local_gig_params #lambda
-        a_glob, b_glob, p_glob = self._global_gig_params #tau
+        a_loc = self._local_gig_a #lambda
+        b_loc = self._local_gig_b #lambda
+        p_loc = self._local_gig_p #lambda
+        a_glob = self._global_gig_a #tau
+        b_glob = self._global_gig_b #tau
+        p_glob = self._global_gig_p #tau
 
         if matrix_calc=='chunked':
             b_int = self.get_b_integral_v_chunked()
         elif matrix_calc=='long':
             b_int = self.get_b_integral()
         d_mat = self.get_diagonal_matrix()
-        data_len= len(self._init_data)
+        data_len= len(self.init_data)
 
         # initialize tau (semi-randomly)
         tau = gig_rvs(a_glob, b_glob, p_glob, 1)
@@ -344,7 +354,7 @@ class FredholmOptimize:
                  int_N = 5000, #number of values to generate when numerically estimated the b integral
                  chunk_size = 100 #for calculating the B Integral
                  ):
-        self._init_data = init_data
+        self.init_data = init_data
         self.known_b = known_b
         self.y_domain = y_domain
         self._kernel = self._set_kernel(kernel_name)
@@ -408,11 +418,11 @@ class FredholmOptimize:
         # calculate the kernel for each of these y and z values together
         kern_vals = np.diag(self._kernel(y_z[:,0], y_z[:, 1]))
 
-        b_int = np.zeros((len(self._init_data) - 1, len(self._init_data) - 1))
+        b_int = np.zeros((len(self.init_data) - 1, len(self.init_data) - 1))
         # doing this as a loop first to make it easier to conceptualize
-        for i, xi in enumerate(self._init_data[:-1]):
-            if i%10 == 0: print(f'For B, at outer loop point {i+1}/{len(self._init_data)+1} in init_data')
-            for j, xj in enumerate(self._init_data[:-1]):
+        for i, xi in enumerate(self.init_data[:-1]):
+            if i%10 == 0: print(f'For B, at outer loop point {i+1}/{len(self.init_data)+1} in init_data')
+            for j, xj in enumerate(self.init_data[:-1]):
                 dy_b_result = self.known_b(xi, y_z[:,0])
                 dz_b_result = self.known_b(xj, y_z[:,1])
                 # if i==0: print(kern_vals.shape, dy_b_result.shape, dz_b_result.shape)
@@ -435,19 +445,19 @@ class FredholmOptimize:
 
         # Chunking init_data processing
         chunk_size = self.chunk_size
-        n_total = len(self._init_data) - 1
+        n_total = len(self.init_data) - 1
         N = self.int_N
         b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
         for start_idx_i in range(0, n_total, chunk_size):
             end_idx_i = min(start_idx_i + chunk_size, n_total)
-            b_y_chunk = self.known_b(np.asarray(self._init_data, dtype=np.float32)[start_idx_i:end_idx_i], y_z[:, 0]).astype(np.float32)
+            b_y_chunk = self.known_b(np.asarray(self.init_data, dtype=np.float32)[start_idx_i:end_idx_i], y_z[:, 0]).astype(np.float32)
             mb_y = b_y_chunk[:, np.newaxis, :]
 
             for start_idx_j in range(0, n_total, chunk_size):
                 end_idx_j = min(start_idx_j + chunk_size, n_total)
 
-                b_z_chunk = self.known_b(np.asarray(self._init_data, dtype=np.float32)[start_idx_j:end_idx_j], y_z[:, 1]).astype(np.float32)
+                b_z_chunk = self.known_b(np.asarray(self.init_data, dtype=np.float32)[start_idx_j:end_idx_j], y_z[:, 1]).astype(np.float32)
                 mb_z = b_z_chunk[np.newaxis, :, :]
 
                 b_chunk = mb_y * mb_z * kern_vals
@@ -460,13 +470,13 @@ class FredholmOptimize:
 
     #returns the variance matrix
     def get_diagonal_matrix(self):
-        data_len = len(self._init_data) -1
+        data_len = len(self.init_data) -1
         d_mat = np.identity(data_len)*1/self.diffusion**2
         return d_mat
 
     def get_theta(self): #theta looks like a fancy "v" with a curl on the right side (for reference to the note)
-        constructor1 = np.asarray(self._init_data)[1:]
-        constructor2 = np.asarray(self._init_data)[:-1]
+        constructor1 = np.asarray(self.init_data)[1:]
+        constructor2 = np.asarray(self.init_data)[:-1]
         theta = constructor1 - constructor2
         return theta
 

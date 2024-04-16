@@ -1,13 +1,16 @@
 import numpy as np
 
+
 def create_data(diffusion, b_func, t_delta, t_end, start_val, verbose=False, **kwargs):
     """
-    Simulates and returns a sequence of data points representing the evolution of a system over time, based on a specified deterministic function and a stochastic diffusion component.
+    Simulates and returns a sequence of data points representing the evolution of a system over time, 
+    based on a specified deterministic function and a stochastic diffusion component.
     The simulation omits the initial 5% of data points to focus on the stabilized behavior of the system.
 
     Parameters:
     - diffusion (float): Intensity of the stochastic fluctuation component.
-    - b_func (callable): Deterministic function that defines the system's evolution, accepting the current system value and optional keyword arguments.
+    - b_func (callable): Deterministic function that defines the system's evolution, 
+    accepting the current system value and optional keyword arguments.
     - t_delta (float): Time increment for each simulation step.
     - t_end (float): Total duration of the simulation.
     - start_val (float): Initial value of the system.
@@ -20,14 +23,14 @@ def create_data(diffusion, b_func, t_delta, t_end, start_val, verbose=False, **k
     val = start_val
     data = []
 
-    def create_next(val):
-        return val + b_func(val, **kwargs) * t_delta + diffusion * np.random.normal(0, np.sqrt(t_delta))
+    def create_next(x):
+        return x + b_func(x, **kwargs) * t_delta + diffusion * np.random.normal(0, np.sqrt(t_delta))
 
     while t < t_end - t_delta:
         data.append(val)
         val = create_next(val)
         t += t_delta
-        if verbose: # and (t-int(t) == 0 or t-int(t)==0.5):
+        if verbose:  # and (t-int(t) == 0 or t-int(t)==0.5):
             print(f'Generated data up to t = {t}/{t_end}')
 
     return data[len(data) // 20:]
@@ -44,12 +47,12 @@ def b2(x, y):
 
 
 # calculation of the integral
-def b_bar(x, b, pi, integral_N=1000):
-    samples = pi.rvs(size=integral_N)
+def b_bar(x, b, pi, integral_n=1000):
+    samples = pi.rvs(size=integral_n)
     # print(samples.shape)
     # print(b(x, samples).shape)
     # print(np.sum(b(x, samples)))
-    return np.sum(b(x, samples)) / integral_N
+    return np.sum(b(x, samples)) / integral_n
 
 
 # b for our first example, 3.1
@@ -70,7 +73,7 @@ def b1_v(x, y):
     # Check if x and y are scalars
     if np.isscalar(x) and np.isscalar(y):
         # Direct computation for scalars
-        result = (x - x**3) * y
+        result = (x - x ** 3) * y
     else:
         # Ensure x and y are numpy arrays for broadcasting
         x = np.asarray(x)
@@ -81,11 +84,12 @@ def b1_v(x, y):
             x = x[:, np.newaxis]
 
         # Apply the formula
-        result = (x - x**3) * y
+        result = (x - x ** 3) * y
 
     return result
 
-# defining b2 from the second exmaple, 3.2
+
+# defining b2 from the second example, 3.2
 def b2_v(x, y):
     """
     Computes the value of the expression (x + y) - (x + y)**3 for each combination of elements
@@ -105,7 +109,7 @@ def b2_v(x, y):
     # Check if x and y are scalars
     if np.isscalar(x) and np.isscalar(y):
         # Direct computation for scalars
-        result = (x + y) - (x + y)**3
+        result = (x + y) - (x + y) ** 3
     else:
         # Ensure x and y are numpy arrays for broadcasting
         x = np.asarray(x)
@@ -116,15 +120,15 @@ def b2_v(x, y):
         y_expanded = y[np.newaxis, :] if y.ndim == 1 else y
 
         # Applying the expression to each pair
-        result = (x_expanded + y_expanded) - (x_expanded + y_expanded)**3
+        result = (x_expanded + y_expanded) - (x_expanded + y_expanded) ** 3
 
     return result
 
 
 # calculation of the integral
-def b_bar_v(x, b, pi, integral_N=1000):
-    samples = pi.rvs(size=integral_N)
+def b_bar_v(x, b, pi, integral_n=1000):
+    samples = pi.rvs(size=integral_n)
     # print(samples.shape)
     # print(b(x, samples).shape)
     # print(np.sum(b(x, samples)))
-    return np.sum(b(x, samples), axis=1) / integral_N
+    return np.sum(b(x, samples), axis=1) / integral_n
