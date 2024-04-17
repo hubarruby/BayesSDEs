@@ -1,6 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from abc import abstractmethod
 
 from utils import gig_rvs
@@ -8,20 +6,14 @@ from utils import gig_rvs
 #function to define gig random variable, even for the edge cases:
 #a class for running, printing, and calculating error for different priors for the SDE estimation
 class Prior:
-    def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 15000, n = 20):
+    def __init__(self, init_data, b_func, diffusion, kernel_name='gauss', gibbs_iters=40):
         self._init_data = init_data
-        self._kernel = self._set_kernel(kernel_name)
         self._b_func = b_func
-        self.gibbs_iters = 150
         self.diffusion = diffusion
+        self._kernel = self._set_kernel(kernel_name)
+        self.gibbs_iters = gibbs_iters
         self.lambda_mat_record = []
         self.beta_record = []
-        self.diffusion_est_record = []
-        #this is based on how the input data was generated:
-        #I dont have it as an input because all of the data we've generated so far has used t_delta=0.05
-        self.t_delta = 0.05
-        self._m = m
-        self._n = n
 
     #Using the specifications from initialization to set the kernel for the object
     def _set_kernel(self, kernel_name):
@@ -74,9 +66,13 @@ class Prior:
 
 #a child of the Prior class; Gig (generalized inverse gaussian)
 class Gig(Prior):
-    def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20, class_params = [2,2,2,0,1]):
-        super().__init__(init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20)
-        self._class_params = class_params #first two are default c = 2, d =2. Default for last three is a=2 b=0 p=1 for LASSO prior (see run_gibbs method)
+    def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20, gig_a = 2, gig_b = 0,
+                 gig_p = 1):
+        super().__init__(init_data, b_func, diffusion, kernel_name='gauss', gibbs_iters=40)
+        self.gig_a = gig_a
+        self.gig_b = gig_b
+        self.gig_p = gig_p
+        # Default for last three is a=2 b=0 p=1 for LASSO prior (see run_gibbs method)
 
     def run_gibbs(self, verbose = True):
         k_mat = self.get_k_matrix()
@@ -89,10 +85,11 @@ class Gig(Prior):
         lambda_mat = np.identity(data_len - 1)
 
         #NOTE: _gig_params in order [c,d,a,b,p] (the last three specify gig.rvs)
-        c,d,a,b,p = self._class_params
+        a,b,p = self.gig_a, self.gig_b, self.gig_p
+        c, d = 2,2
         c_prime = c + (data_len-1)/2
         t_delta = self.t_delta
-        assert self.lambda_mat_record == [] and self.beta_record == [] and self.diffusion_est_record == [], 'you have already ran the gibbs process for this object; run obj.reset to forget these results'
+        assert self.lambda_mat_record == [] and self.beta_record == [] 'you have already ran the gibbs process for this object; run obj.reset to forget these results'
 
         for i in range(self.gibbs_iters):
             #draw a diagonal matrix of lambda^2 values, using the inverse gamma distribution
@@ -119,7 +116,6 @@ class Gig(Prior):
                     print(f'step {i} completed')
             self.lambda_mat_record.append(lambda_mat)
             self.beta_record.append(beta)
-            self.diffusion_est_record.append(zeta)
 
 #a very similar class, but now for inverse gamma gibbs smapling, rather than generalized inverse gauss (IG vs GIG)
 class Ig(Prior):
