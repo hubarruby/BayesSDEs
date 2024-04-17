@@ -120,9 +120,9 @@ class FredholmGlobLoc:
         self._local_gig_a = a_loc  # desired low shrinkage
         self._local_gig_b = b_loc
         self._local_gig_p = p_loc
-        self._global_gig_a = a_glob  # desired high shrinkage
-        self._global_gig_b = b_glob
-        self._global_gig_p = p_glob
+        self._global_gig_a = a_glob  # desired high shrinkage.
+        self._global_gig_b = b_glob # For the case where we only want one prior, we ignore the global.
+        self._global_gig_p = p_glob # Instead, set them all to 0 to make the gibbs process only use the local params.
         self.init_data = init_data
         self._kernel = self._set_kernel(kernel_name)
         self.known_b = known_b
@@ -316,15 +316,19 @@ class FredholmGlobLoc:
         data_len = len(self.init_data)
 
         # initialize tau (semi-randomly)
-        tau = gig_rvs(a_glob, b_glob, p_glob, 1)
+        if a_glob == b_glob == p_glob == 0:
+            #in this case, we are not using global priors so tau is not modified during the gibbs process
+            global_prior = False
+            tau = 1
+        else:
+            global_prior = True
+            tau = gig_rvs(a_glob, b_glob, p_glob, 1)
         # randomly initialize beta
         beta = np.random.normal(0, 0.05, data_len - 1)  # a vector (beta coeffs)
         lambda_mat = np.identity(data_len - 1)
         theta = self.get_theta()
-        # print('theta shape: ', theta.shape)
 
         t_delta = self.t_delta
-        assert self.lambda_mat_record == [] and self.beta_record == [], 'you have already ran the gibbs process for this object; run obj.reset to forget these results'
 
         for i in range(self.gibbs_iters):
             # draw a diagonal matrix of lambda^2
@@ -335,7 +339,7 @@ class FredholmGlobLoc:
             # lambda then informs the distribution of tau
             tau = gig_rvs(a_glob, np.sum(
                 [(1 / lamb) * (beta[i] ** 2) for i, lamb in enumerate(np.diagonal(lambda_mat))]) + b_glob,
-                          p_glob - 1 / 2 - 1, 1)
+                          p_glob - 1 / 2 - 1, 1) if global_prior else 1
 
             # Now, using these, we sample beta
             eta = self.get_eta(lambda_mat, tau)
