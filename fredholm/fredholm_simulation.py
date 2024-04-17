@@ -7,7 +7,6 @@ import os
 from .fredholm_datagen_utils import create_data, b1_v, b2_v, b_bar
 from .fredholm_utils import FredholmGlobLoc
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Run the Fredholm simulation with configurable parameters.")
     parser.add_argument('--results_filepath', type=str, required=True,

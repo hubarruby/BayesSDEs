@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def create_data(diffusion, b_func, t_delta, t_end, start_val, verbose=False, **kwargs):
     """
     Simulates and returns a sequence of data points representing the evolution of a system over time, 

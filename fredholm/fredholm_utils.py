@@ -2,9 +2,7 @@ import numpy as np
 import time
 from scipy.optimize import minimize
 
-import sys
-sys.path.append('../')
-from utils import gig_rvs
+from helpers.utils import gig_rvs
 
 def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_domain, int_N=5000, chunk_size=100):
     """
