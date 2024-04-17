@@ -43,6 +43,11 @@ def parse_args():
     parser.add_argument('--global_gig_p', type=float, default=1, help='"p" parameter for the global GIG distribution.')
     parser.add_argument('--kernel_name', type=str, default='gauss',
                         help='Name of the kernel function used in calculations.')
+    parser.add_argument('--timer', type=bool, default=True,
+                        help='Whether to display time estimates throughout the simulation process.')
+    parser.add_argument('--matrix_calc', type=str, default='scipy',
+                        help='Method for calculating the numeric integration of b. '
+                             'Can be "chunked", "scipy", or "long".')
 
     args = parser.parse_args()
     print("Parsed Arguments:", args)
@@ -76,13 +81,19 @@ class FredSimulation:
         integral_n (int): Number of points for numerical integration.
         y_domain (tuple): Domain of the Y variable as a tuple (low, high).
         b (callable): Function to be used in the simulation of data and the learning algorithm (b1_v or b2_v).
-        local_gig_a (float): 'a' parameter for local GIG distribution on the learned parameters.
-        local_gig_b (float): 'b' parameter for local GIG distribution on the learned parameters.
-        local_gig_p (float): 'p' parameter for local GIG distribution on the learned parameters.
-        global_gig_a (float): 'a' parameter for global GIG distribution on the learned parameters.
-        global_gig_b (float): 'b' parameter for global GIG distribution on the learned parameters.
-        global_gig_p (float): 'p' parameter for global GIG distribution on the learned parameters.
+        a_loc (float): 'a' parameter for local GIG distribution on the learned parameters.
+        b_loc (float): 'b' parameter for local GIG distribution on the learned parameters.
+        p_loc (float): 'p' parameter for local GIG distribution on the learned parameters.
+        a_glob (float): 'a' parameter for global GIG distribution on the learned parameters.
+        b_glob (float): 'b' parameter for global GIG distribution on the learned parameters.
+        p_glob (float): 'p' parameter for global GIG distribution on the learned parameters.
         kernel_name (str): Name of the kernel function used.
+        timer (bool): Whether to display time estimates throughout the simulation
+        matrix_calc (str): method for caluclation the numeric integration of b.
+            Can be 'chunked', 'long', or 'scipy'.
+            Use chunked for faster and less precise b matrix integration estimates,
+            and scipy for more-precise and slower estimates.
+            Using 'long' is not recommended (both imprecise and costly).
 
     Methods:
         run_simulation: Executes the simulation and saves the results.
@@ -92,7 +103,7 @@ class FredSimulation:
                  gibbs_iters=40, chunk_size=150, integral_n=5000,
                  y_domain=(-100, 100), b=b1_v, a_loc=2, b_loc=0,
                  p_loc=1, a_glob=2, b_glob=0, p_glob=1,
-                 kernel_name='gauss'):
+                 kernel_name='gauss', timer=True, matrix_calc='scipy'):
         """
         Initialize a simulation instance with specified parameters for running Fredholm SDE learning simulations.
 
@@ -120,6 +131,11 @@ class FredSimulation:
             b_glob (float): The 'b' parameter for the global GIG distribution.
             p_glob (float): The 'p' parameter for the global GIG distribution.
             kernel_name (str): The name of the kernel function used in the simulation's calculations.
+            timer (bool): Whether to display time estimates throughout the simulation.
+            matrix_calc (str): Can be 'chunked', 'long', or 'scipy'.
+                Use chunked for faster and less precise b matrix integration estimates,
+                and scipy for more-precise and slower estimates.
+                Using 'long' is not recommended (both imprecise and costly).
 
         Sets up the Fredholm learning simulation environment based on the provided parameters, preparing for a run that
         can be executed using the method `run_simulation`.
@@ -145,6 +161,8 @@ class FredSimulation:
         self._global_gig_b = b_glob
         self._global_gig_p = p_glob
         self.kernel_name = kernel_name
+        self.timer = timer
+        self.matrix_calc = matrix_calc
 
     def run_simulation(self):
         """
@@ -172,9 +190,10 @@ class FredSimulation:
                                             a_glob=self._global_gig_a,  # tau
                                             b_glob=self._global_gig_b,  # tau
                                             p_glob=self._global_gig_p,  # tau
-                                            kernel_name=self.kernel_name
+                                            kernel_name=self.kernel_name,
+                                            timer=self.timer
                                             )
-        fred_glob_loc_obj.run_gibbs(matrix_calc='chunked')
+        fred_glob_loc_obj.run_gibbs(matrix_calc=self.matrix_calc)
 
         fred_results_dict = dict(
             meta_data=dict(scale=self.scale, loc=self.loc, a_trunc=self.a_trunc, b_trunc=self.b_trunc,
@@ -183,7 +202,7 @@ class FredSimulation:
                            integral_n=self.integral_n, y_domain=self.y_domain, results_filepath=self.results_filepath,
                            local_gig_a=self._local_gig_a, local_gig_b=self._local_gig_b, local_gig_p=self._local_gig_p,
                            global_gig_a=self._global_gig_a, global_gig_b=self._global_gig_b,
-                           global_gig_p=self._global_gig_p, kernel_name=self.kernel_name),
+                           global_gig_p=self._global_gig_p, kernel_name=self.kernel_name, timer=self.timer),
             beta_record=fred_glob_loc_obj.beta_record, y_domain=fred_glob_loc_obj.y_domain,
             init_data=fred_glob_loc_obj.init_data, known_b=fred_glob_loc_obj.known_b,
             diffusion=fred_glob_loc_obj.diffusion)
@@ -222,7 +241,9 @@ def main():
         a_glob=args.global_gig_a,
         b_glob=args.global_gig_b,
         p_glob=args.global_gig_p,
-        kernel_name=args.kernel_name
+        kernel_name=args.kernel_name,
+        timer=args.timer,
+        matrix_calc=args.matrix_calc
     )
     simulation.run_simulation()
 
