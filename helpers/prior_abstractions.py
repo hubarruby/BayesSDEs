@@ -22,12 +22,6 @@ class Prior:
         self.t_delta = 0.05
         self._m = m
         self._n = n
-        self._b_mdata = None
-        self._bhat_mdata = None
-        self._b_cdf = None
-        self._bhat_cdf = None
-        self._mse = None
-        self._kolmogorov = None
 
     #Using the specifications from initialization to set the kernel for the object
     def _set_kernel(self, kernel_name):
@@ -42,40 +36,7 @@ class Prior:
             def kern(x,y): return np.exp(-abs(x-y)/np.sqrt(2)) (x*y + 1)**order
             return kern
 
-    def _create_data(self, s):
-        np.random.seed(999)
-        t = 0
-        val = 0
-        data = []
-        t_delta = self.t_delta
-
-        if s.lower() == 'b':
-            def create_next(val):
-                return val + self._b_func(val)*t_delta + self.diffusion*np.random.normal(0,np.sqrt(t_delta))
-
-            for i in range(int(self._m)):
-                data.append(val)
-                val = create_next(val)
-                t += t_delta
-            return data
-
-        elif s.lower() == 'bhat':
-            assert self.beta_record != [], "Error: trying to generate data with bhat before bhat exists."
-            def create_next(val):
-                #this should change to use the last x% of data samples, not just beta_record[-20:]
-                return val + self.get_b_hat(val, np.mean(self.beta_record[-20:], axis = 0))*t_delta + self.diffusion*np.random.normal(0,np.sqrt(t_delta))
-            for i in range(int(self._m)):
-                data.append(val)
-                val = create_next(val)
-                t += t_delta
-            return data
-
-    def get_b_hat(self, x, beta_vect):
-        data = self._init_data
-        return np.sum([beta_vect[i]*self._kernel(x, data[i]) for i in range(len(data)-1)])
-
     #define the matrix of k-values (kernel output for each possible pair of data points)
-    #TODO: I want to try to vectorize this function, which will probably dramatically speed up the simulation speeds
     def get_k_matrix(self):
         data = self._init_data
         k_mat_len = len(data)-1
@@ -86,7 +47,6 @@ class Prior:
         return np.array(k_mat)
 
     #create the c vector (pretty self-explanatory what this is)
-    #TODO: would also be good to vectorize this
     def get_c_vect(self):
         data = self._init_data
         c_vect = []
@@ -111,120 +71,6 @@ class Prior:
     @abstractmethod
     def run_gibbs(self, verbose = True):
         pass
-
-    def set_metric_data_size(self, m):
-        assert self._b_mdata != [] and self._bhat_mdata != [], f'Metric test data has already been generated using m = {self.__m}; manually reset _b_mdata and __bhat_mdata to change m'
-        self._m = m
-
-    def _create_mdata(self, s):
-        #frankly, this could be turned into a single function,instead of calling the hidden funciton too
-        if 'bhat' in s.strip():
-            self._bhat_mdata = self._create_data(s)[int(self._m/10):]
-        elif 'b' in s.strip():
-            #the indexing at the end is to remove the first 10% of data
-            self._b_mdata = self._create_data(s)[int(self._m/10):]
-        else:
-            raise Exception('invalid keyword for _create_mdata')
-
-    def return_mdata(self, s):
-        if 'bhat' == s.lower() and self._bhat_mdata != None:
-            return self._bhat_mdata
-        elif 'b' == s.lower() and self._b_mdata != None:
-            return self._b_mdata
-        else:
-            raise Exception('invalid keyword for _return_mdata; use "bhat" or "b"')
-
-    #plots a histogram of the data that is available
-    def data_hist(self,s, smoothing = True):
-        if smoothing:
-            if 'bhat' == s.lower():
-                if self._bhat_mdata != None:
-                    sns.displot(self._bhat_mdata, kind = "kde", fill = True)
-                    plt.title("bhat generated data histogram")
-                    plt.show()
-                else: raise Exception("cannot make a histogram for data that doesn't exist yet (bhat)")
-            elif "b" == s.lower():
-                if self._b_mdata != None:
-                    sns.displot(self._b_mdata, kind = "kde", fill = True)
-                    plt.title("true b generated data histogram")
-                    plt.show()
-                else:
-                    raise Exception("cannot make a histogram for data that doesn't exist yet (b)")
-            elif s.lower() == 'original':
-                sns.displot(self._init_data, kind = "kde", fill = True)
-                plt.title("True b original learning data histogram")
-                plt.show()
-            else:
-                raise Exception('invalid keyword for data_hist; use "bhat", "b", or "original".')
-        else:
-            if 'bhat' == s.lower():
-                if self._bhat_mdata != None:
-                    sns.displot(self._bhat_mdata, bins = 100, stat ='density')
-                    plt.title("bhat generated data histogram")
-                    plt.show()
-                else: raise Exception("cannot make a histogram for data that doesn't exist yet (bhat)")
-            elif "b" == s.lower():
-                if self._b_mdata != None:
-                    sns.displot(self._b_mdata, bins = 100, stat ='density')
-                    plt.title("true b generated data histogram")
-                    plt.show()
-                else:
-                    raise Exception("cannot make a histogram for data that doesn't exist yet (b)")
-            elif s.lower() == 'original':
-                sns.displot(self._init_data, bins = 100, stat ='density')
-                plt.title("True b original learning data histogram")
-                plt.show()
-            else:
-                raise Exception('invalid keyword for data_hist; use "bhat", "b", or "original".')
-
-    def plot_b_vs_bhat(self):
-        # plotting bhat using the averaged last n values recorded from gibbs
-        # can be made more efficient
-        n = self._n
-        x_vals = self._init_data
-        last_n_beta_avg = np.mean(np.array(self.beta_record[-n:]), axis = 0)
-        avgd_beta_est = [self.get_b_hat(x, last_n_beta_avg) for x in x_vals]
-        plt.scatter(x_vals, avgd_beta_est, c = 'red', label = f'Approximated b, averaged last {n} gibbs samples', s= 2)
-        plt.scatter(x_vals, [self._b_func(x) for x in x_vals], c = 'blue', label = 'True b', s= 2)
-
-    def plot_shrinkage(self):
-        last_beta = self.beta_record[-1]
-        plt.hist(last_beta, bins = 50)
-
-    def find_mse(self):
-        #when sampling the last few values of beta to get bhat, do we
-        # 1) average n beta vectors, then calc the bhat values using the average, or
-        #2) calc bhat values for n different beta vectors, and average the bhat values?
-        #hypothesis: betas are the thing being sampled, so we should average them first.
-        if self._mse == None:
-            n = self._n
-            data = self._init_data
-            self._mse = (1/len(data))*np.sum(np.array([self.get_b_hat(x,
-                                                                      np.mean(np.array(self.beta_record[-n:]), axis = 0)) - self._b_func(x) for x in data])**2)
-        else:
-            raise Exception('no point recalculating mse error; you can use "return_mse()" to output it.')
-
-    def return_mse(self):
-        return self._mse
-
-    def _calc_cdf(self, s):
-        if 'bhat' == s.lower():
-            self._bhat_cdf = (1/len(self._bhat_mdata))*np.array([np.sum(np.where(np.array(self._bhat_mdata) <= x, 1, 0)) for x in self._init_data])
-        elif 'b' == s.lower():
-            self._b_cdf = (1/len(self._b_mdata))*np.array([np.sum(np.where(np.array(self._b_mdata) <= x, 1, 0)) for x in self._init_data])
-        else:
-            raise Exception('must call _calc_cdf using string "bhat" or "b".')
-
-    def find_kolmogorov(self):
-        if self._kolmogorov == None:
-            self._create_mdata('b')
-            self._create_mdata('bhat')
-            self._calc_cdf('bhat')
-            self._calc_cdf('b')
-            self._kolmogorov = np.max(np.absolute(self._b_cdf - self._bhat_cdf))
-
-    def return_kolmogorov(self):
-        return self._kolmogorov
 
 #a child of the Prior class; Gig (generalized inverse gaussian)
 class Gig(Prior):
@@ -275,18 +121,6 @@ class Gig(Prior):
             self.beta_record.append(beta)
             self.diffusion_est_record.append(zeta)
 
-    def plot_b_vs_bhat(self):
-        super().plot_b_vs_bhat()
-        plt.title(f'graph using GIG Prior (params a,b,p = {self._class_params[2:]})')
-        plt.legend()
-        plt.show()
-
-    def plot_shrinkage(self):
-        super().plot_shrinkage()
-        plt.title('GIG: final beta sample/shrinkage plot')
-        plt.show()
-
-
 #a very similar class, but now for inverse gamma gibbs smapling, rather than generalized inverse gauss (IG vs GIG)
 class Ig(Prior):
     def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20, class_params = [2,2,1,2]):
@@ -335,19 +169,6 @@ class Ig(Prior):
             self.beta_record.append(beta)
             self.diffusion_est_record.append(zeta)
 
-    def plot_b_vs_bhat(self):
-        # plotting bhat using the averaged last n values recorded from gibbs
-        super().plot_b_vs_bhat()
-        plt.title(f'graph using Inverse Gamma prior (params [a, b] = {self._ig_params[-2:]}')
-        plt.legend()
-        plt.show()
-
-    def plot_shrinkage(self):
-        super().plot_shrinkage()
-        plt.title('IG: final beta sample/shrinkage plot')
-        plt.show()
-
-#a very similar class, but now for inverse gamma gibbs smapling, rather than generalized inverse gauss (IG vs GIG)
 class Shoe(Prior):
     def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 2000, n = 20):
         super().__init__(init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20)
@@ -405,15 +226,3 @@ class Shoe(Prior):
             self.lambda_mat_record.append(lambda_mat)
             self.beta_record.append(beta)
             self.diffusion_est_record.append(zeta_sq)
-
-    def plot_b_vs_bhat(self):
-        # plotting bhat using the averaged last n values recorded from gibbs
-        super().plot_b_vs_bhat()
-        plt.title(f'graph using Horseshoe Prior')
-        plt.legend()
-        plt.show()
-
-    def plot_shrinkage(self):
-        super().plot_shrinkage()
-        plt.title('Horseshoe: final beta shrinkage plot')
-        plt.show()
