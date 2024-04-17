@@ -77,35 +77,12 @@ class GigSimulation:
                     )
         gig_obj.run_gibbs()
 
-        fred_results_dict = {
-            'meta_data': {
-                'scale': self.scale,
-                'loc': self.loc,
-                'a_trunc': self.a_trunc,
-                'b_trunc': self.b_trunc,
-                'diffusion': self.diffusion,
-                't_delta': self.t_delta,
-                't_end': self.t_end,
-                'start_val': self.start_val,
-                'gibbs_iters': self.gibbs_iters,
-                'chunk_size': self.chunk_size,
-                'integral_n': self.integral_n,
-                'y_domain': self.y_domain,
-                'results_filepath': self.results_filepath,
-                'local_gig_a': self._local_gig_a,
-                'local_gig_b': self._local_gig_b,
-                'local_gig_p': self._local_gig_p,
-                'global_gig_a': self._global_gig_a,
-                'global_gig_b': self._global_gig_b,
-                'global_gig_p': self._global_gig_p,
-                'kernel_name': self.kernel_name
-            },
-            'beta_record': fred_glob_loc_obj.beta_record,
-            'y_domain': fred_glob_loc_obj.y_domain,
-            'init_data': fred_glob_loc_obj.init_data,
-            'known_b': fred_glob_loc_obj.known_b,
-            'diffusion': fred_glob_loc_obj.diffusion
-        }
+        fred_results_dict = dict(
+            meta_data=dict(b_func=self.b_func, diffusion=self.diffusion, t_delta=self.t_delta, t_end=self.t_end,
+                           start_val=self.start_val, gibbs_iters=self.gibbs_iters,
+                           results_filepath=self.results_filepath, gig_a=self.gig_a, gig_b=self.gig_b,
+                           gig_p=self.gig_p, kernel_name=self.kernel_name),
+            beta_record=gig_obj.beta_record, init_data=gig_obj.init_data, diffusion=gig_obj.diffusion)
 
         os.makedirs(os.path.dirname(self.results_filepath), exist_ok=True)
 
@@ -120,27 +97,17 @@ def main():
     # Assuming function_map for b_function is handled outside main or earlier in the script
     b_func = function_map[args.b_function]
 
-    simulation = FredSimulation(
+    simulation = GigSimulation(
         results_filepath=args.results_filepath,
-        scale=args.scale,
-        loc=args.loc,
-        a_trunc=args.a_trunc,
-        b_trunc=args.b_trunc,
         diffusion=args.diffusion,
         t_delta=args.t_delta,
         t_end=args.t_end,
         start_val=args.start_val,
         gibbs_iters=args.gibbs_iters,
-        chunk_size=args.chunk_size,
-        integral_n=args.integral_n,
-        y_domain=args.y_domain,
-        b=b_func,
-        a_loc=args.local_gig_a,
-        b_loc=args.local_gig_b,
-        p_loc=args.local_gig_p,
-        a_glob=args.global_gig_a,
-        b_glob=args.global_gig_b,
-        p_glob=args.global_gig_p,
+        b_func=b_func,
+        gig_a=args.gig_a,
+        gig_b=args.gig_b,
+        gig_p=args.gig_p,
         kernel_name=args.kernel_name
     )
     simulation.run_simulation()

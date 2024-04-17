@@ -6,12 +6,13 @@ from utils import gig_rvs
 #function to define gig random variable, even for the edge cases:
 #a class for running, printing, and calculating error for different priors for the SDE estimation
 class Prior:
-    def __init__(self, init_data, b_func, diffusion, kernel_name='gauss', gibbs_iters=40):
-        self._init_data = init_data
-        self._b_func = b_func
+    def __init__(self, init_data, b_func, diffusion, kernel_name='gauss', gibbs_iters=40, t_delta=0.05):
+        self.init_data = init_data
+        self.b_func = b_func
         self.diffusion = diffusion
         self._kernel = self._set_kernel(kernel_name)
         self.gibbs_iters = gibbs_iters
+        self.t_delta=t_delta
         self.lambda_mat_record = []
         self.beta_record = []
 
@@ -30,7 +31,7 @@ class Prior:
 
     #define the matrix of k-values (kernel output for each possible pair of data points)
     def get_k_matrix(self):
-        data = self._init_data
+        data = self.init_data
         k_mat_len = len(data)-1
         k_mat = np.zeros((k_mat_len, k_mat_len))
         for i in range(k_mat_len):
@@ -40,7 +41,7 @@ class Prior:
 
     #create the c vector (pretty self-explanatory what this is)
     def get_c_vect(self):
-        data = self._init_data
+        data = self.init_data
         c_vect = []
         for i in range(1, len(data)):
             c_vect.append(data[i] - data[i-1])
@@ -66,9 +67,9 @@ class Prior:
 
 #a child of the Prior class; Gig (generalized inverse gaussian)
 class Gig(Prior):
-    def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20, gig_a = 2, gig_b = 0,
+    def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', gibbs_iters=40, t_delta=0.05, gig_a = 2, gig_b = 0,
                  gig_p = 1):
-        super().__init__(init_data, b_func, diffusion, kernel_name='gauss', gibbs_iters=40)
+        super().__init__(init_data, b_func, diffusion, kernel_name=kernel_name, gibbs_iters=gibbs_iters, t_delta=0.05)
         self.gig_a = gig_a
         self.gig_b = gig_b
         self.gig_p = gig_p
@@ -77,7 +78,7 @@ class Gig(Prior):
     def run_gibbs(self, verbose = True):
         k_mat = self.get_k_matrix()
         c_vect = self.get_c_vect()
-        data_len= len(self._init_data)
+        data_len= len(self.init_data)
         #TODO add a way to specify these following starting priors;
         #right now just set to diffusion = 0.5 and beta = np.zeros()
         zeta = 0.5**2 #a scalar (noise coeff)
@@ -89,7 +90,6 @@ class Gig(Prior):
         c, d = 2,2
         c_prime = c + (data_len-1)/2
         t_delta = self.t_delta
-        assert self.lambda_mat_record == [] and self.beta_record == [] 'you have already ran the gibbs process for this object; run obj.reset to forget these results'
 
         for i in range(self.gibbs_iters):
             #draw a diagonal matrix of lambda^2 values, using the inverse gamma distribution
@@ -126,7 +126,7 @@ class Ig(Prior):
     def run_gibbs(self, verbose = True):
         k_mat = self.get_k_matrix()
         c_vect = self.get_c_vect()
-        data_len= len(self._init_data)
+        data_len= len(self.init_data)
         #TODO add a way to specify these following starting priors;
         #right now just set to diffusion = 0.5 and beta = np.zeros()
         zeta = 0.5**2 #a scalar (noise coeff)
@@ -172,7 +172,7 @@ class Shoe(Prior):
     def run_gibbs(self, verbose = True):
         k_mat = self.get_k_matrix()
         c_vect = self.get_c_vect()
-        data_len= len(self._init_data)
+        data_len= len(self.init_data)
         #TODO add a way to specify these following starting priors;
         #right now just set to diffusion = 0.5 and beta = np.zeros()
         zeta_sq = 1/np.random.gamma(1, 1/2) #The noise coefficient (squared), prior is from inverse gamma (a = 1, b = 2; these are not specific)
