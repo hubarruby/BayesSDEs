@@ -4,7 +4,7 @@ from scipy.optimize import minimize
 
 import sys
 sys.path.append('../')
-from prior_abstractions import gig_rvs
+from utils import gig_rvs
 
 def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_domain, int_N=5000, chunk_size=100):
     """
@@ -271,12 +271,10 @@ class FredholmGlobLoc:
         b_glob = self._global_gig_b #tau
         p_glob = self._global_gig_p #tau
 
-        if matrix_calc=='chunked':
-            b_int = self.get_b_integral_v_chunked()
-        elif matrix_calc=='long':
-            b_int = self.get_b_integral()
+        b_int = self.get_b_integral_v_chunked() if matrix_calc=='chunked' else self.get_b_integral()
+
         d_mat = self.get_diagonal_matrix()
-        data_len= len(self.init_data)
+        data_len = len(self.init_data)
 
         # initialize tau (semi-randomly)
         tau = gig_rvs(a_glob, b_glob, p_glob, 1)

@@ -4,7 +4,7 @@ from scipy.stats import truncnorm
 import pickle
 import os
 
-from .datagen_utils import create_data, b1_v, b2_v, b_bar
+from .fredholm_datagen_utils import create_data, b1_v, b2_v, b_bar
 from .fredholm_utils import FredholmGlobLoc
 
 

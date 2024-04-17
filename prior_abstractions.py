@@ -1,48 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import geninvgauss, gamma, invgamma
-from datetime import datetime
 from abc import abstractmethod
-import pickle
-import pandas as pd
 
-def gig_rvs(a, b, p, size):
-    '''
-    Generate Generalized Inverse Gaussian random variables
-
-    pdf: f(x, a, b, p) = ( (a/b)^{p/2} / (2 K_p(\sqrt{ab})) ) * x^{p-1} \exp(-ax + b/x)
-          where a > 0, b > 0, p is a real number
-
-    when a --> 0, GIG --> InvGamma;
-    when b --> 0, GIG --> Gamma;
-
-    Special cases:
-        Gamma(shape=alpha, rate=beta) = GIG(2*beta, 0, alpha)
-        InvGamma(alpha, beta) = GIG(0, 2*beta, -alpha)
-        InvGaussian(mu, lambda) = GIG(lambda/mu^2, lambda, −1/2)
-        Park and Casella’s Lasso(alpha^2) = GIG(alpha^2, 0, 1)
-    '''
-    if a == 0 and b == 0:
-        raise ValueError('GIG can not have input with both a and b being 0')
-
-    if b == 0: # Gamma
-        shape_gamma = p
-        rate_gamma = a / 2
-        rvs = gamma.rvs(a=shape_gamma, scale=1/rate_gamma, size=size)
-
-    if a == 0: # InvGamma
-        shape_invgamma = -p
-        scale_invgamma = b / 2
-        rvs = invgamma.rvs(a=shape_invgamma, scale=scale_invgamma, size=size)
-
-    if a != 0 and b != 0:
-        p_ss = p
-        b_ss = np.sqrt(a*b)
-        scale_ss = np.sqrt(b/a)
-        rvs = geninvgauss.rvs(p=p_ss, b=b_ss, loc=0, scale=scale_ss, size=size)
-
-    return rvs
+from utils import gig_rvs
 
 #function to define gig random variable, even for the edge cases:
 #a class for running, printing, and calculating error for different priors for the SDE estimation
@@ -456,66 +417,3 @@ class Shoe(Prior):
         super().plot_shrinkage()
         plt.title('Horseshoe: final beta shrinkage plot')
         plt.show()
-
-
-    class GL_Gig(Prior):
-        def __init__(self, init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20, local_gig_params = [0.5, 0, 2], global_gig_params = [2,0,1]):
-            super().__init__(init_data, b_func, diffusion, kernel_name = 'gauss', m = 100000, n = 20)
-            self._local_gig_params = local_gig_params #typically, we'd want this to have a heavy tail (it is the form [a,b,p], default is [0.5,0,2], which has a large tail (but not much shrinkage))
-            self._global_gig_params = global_gig_params #typically, we'd want this to have high shrinkage (it is the form [a,b,p], default is the Lasso, which has high shrinkage)
-
-        def run_gibbs(self, verbose = True):
-            k_mat = self.get_k_matrix()
-            c_vect = self.get_c_vect()
-            data_len= len(self._init_data)
-            #TODO add a way to specify these following starting priors;
-            #right now just set to diffusion = 0.5 and beta = np.zeros()
-            zeta = 0.5**2 #a scalar (noise coeff)
-            beta = np.zeros(data_len) #a vector (beta coeffs)
-            lambda_mat = np.identity(data_len - 1)
-
-            #NOTE: _gig_params in order [a,b,p] (the three specify gig.rvs)
-            a_loc,b_loc,p_loc = self._local_gig_params
-            a_glob,b_glob,p_glob = self._global_gig_params
-            c = 2 #somewhat arbitrary, at least for right now
-            c_prime = c + (data_len-1)/2
-            t_delta = self.t_delta
-            assert self.lambda_mat_record == [] and self.beta_record == [] and self.diffusion_est_record == [], 'you have already ran the gibbs process for this object; run obj.reset to forget these results'
-
-            for i in range(self.gibbs_iters):
-                #draw a diagonal matrix of lambda^2 values, using the inverse gamma distribution
-                #this replaces the 1 values inside of lambda_mat
-                np.fill_diagonal(lambda_mat, [gig_rvs(a, (beta[i]**2+b), p - 1/2, 1) for i in range(data_len - 1)])
-                #Don't know if this shoul dbe there; it seems to really mess up results:
-                # lambda_mat = lambda_mat**2
-                #use this matrix to compute the matrix and covariance for beta vector
-                #sample from these values
-                variance_matrix = self.get_variance_matrix(k_mat, zeta, lambda_mat)
-                mu_vect = self.get_mu_vector(variance_matrix, zeta, c_vect, k_mat)
-                beta = np.random.multivariate_normal(mu_vect,variance_matrix)
-
-                #draw a new guess for zeta given the beta and lambda_mat values
-                #it is an inverse gamme of c_prime and d_prime, defined below
-                d_prime_1 = (1/(2*t_delta))*np.sum(c_vect**2)
-                d_prime_2 = t_delta/2* (beta.T @ (k_mat.T @ (k_mat @ beta))) - c_vect.T @ (k_mat @ beta) + d
-                d_prime = d_prime_1 + d_prime_2
-                zeta = 1/np.random.gamma(shape = c_prime, scale = 1/d_prime)
-
-                #keeping track of things here
-                if verbose:
-                    if i%25 == 0:
-                        print(f'step {i} completed')
-                self.lambda_mat_record.append(lambda_mat)
-                self.beta_record.append(beta)
-                self.diffusion_est_record.append(zeta)
-
-        def plot_b_vs_bhat(self):
-            super().plot_b_vs_bhat()
-            plt.title(f'graph using GIG Prior (params a,b,p = {self._class_params[2:]})')
-            plt.legend()
-            plt.show()
-
-        def plot_shrinkage(self):
-            super().plot_shrinkage()
-            plt.title('GIG: final beta sample/shrinkage plot')
-            plt.show()
