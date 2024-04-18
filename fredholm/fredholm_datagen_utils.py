@@ -35,16 +35,6 @@ def create_data(diffusion, b_func, t_delta, t_end, start_val, verbose=False, **k
     return data[len(data) // 20:]
 
 
-# b for our first example, 3.1
-def b1(x, y):
-    return (x - x ** 3) * y
-
-
-# defining b for the second example, 3.2
-def b2(x, y):
-    return (x + y) - (x + y) ** 3
-
-
 # calculation of the integral
 def b_bar(x, b, pi, integral_n=1000):
     samples = pi.rvs(size=integral_n)
@@ -55,7 +45,7 @@ def b_bar(x, b, pi, integral_n=1000):
 
 
 # b for our first example, 3.1
-def b1_v(x, y):
+def b1(x, y):
     """
     Computes the value of b for each combination of elements in vectors (or numpy arrays) of x and y values,
     or a single value of x and y, according to the formula (x - x**3) * y. The result is a matrix where each
@@ -89,7 +79,7 @@ def b1_v(x, y):
 
 
 # defining b2 from the second example, 3.2
-def b2_v(x, y):
+def b2(x, y):
     """
     Computes the value of the expression (x + y) - (x + y)**3 for each combination of elements
     in vectors (or numpy arrays) of x and y values, or a single value of x and y. The result is

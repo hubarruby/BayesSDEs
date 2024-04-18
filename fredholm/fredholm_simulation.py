@@ -42,8 +42,8 @@ def parse_args():
     parser.add_argument('--integral_n', type=int, default=5000, help='Number of integral points.')
     parser.add_argument('--y_domain', type=float, nargs=2, default=[-1000, 1000],
                         help='Domain for the Y variable as low, high.')
-    parser.add_argument('--b_function', type=str, choices=['b1_v', 'b2_v', 'b_gamma1', 'b_gamma2'],
-                        default='b1_v', help='The b function to use in the simulation (b1_v or b2_v).')
+    parser.add_argument('--b_function', type=str, choices=['b1', 'b2', 'b_gamma1', 'b_gamma2'],
+                        default='b1', help='The b function to use in the simulation (b1, b2, b_gamma1, b_gamma2).')
     parser.add_argument('--local_gig_a', type=float, default=2, help='"a" parameter for the local GIG distribution.')
     parser.add_argument('--local_gig_b', type=float, default=0, help='"b" parameter for the local GIG distribution.')
     parser.add_argument('--local_gig_p', type=float, default=1, help='"p" parameter for the local GIG distribution.')
@@ -66,8 +66,8 @@ def parse_args():
 
 
 function_map = {
-    'b1_v': b1_v,
-    'b2_v': b2_v,
+    'b1': b1,
+    'b2': b2,
     'b_gamma1': b_gamma1,
     'b_gamma2': b_gamma2
 }
@@ -94,7 +94,8 @@ class FredSimulation:
         chunk_size (int): Size of chunks for B integral calculation, prior to running the Gibbs sampling.
         integral_n (int): Number of points for numerical integration.
         y_domain (tuple): Domain of the Y variable as a tuple (low, high).
-        b (callable): Function to be used in the simulation of data and the learning algorithm (b1_v or b2_v).
+        b (callable): Function to be used in the simulation of data and the learning algorithm
+        (b1, b2, b_gamma1, or b_gamma2).
         a_loc (float): 'a' parameter for local GIG distribution on the learned parameters.
         b_loc (float): 'b' parameter for local GIG distribution on the learned parameters.
         p_loc (float): 'p' parameter for local GIG distribution on the learned parameters.
