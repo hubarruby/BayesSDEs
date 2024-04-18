@@ -156,7 +156,7 @@ def b_gamma1(x, y):
     return result
 
 
-def gamma2_v(x, y):
+def b_gamma2(x, y):
     """
     Computes the value of gamma2 for each combination of elements in vectors (or numpy arrays) of x and y values,
     or a single value of x and y, according to the formula (9/x - 5)*y. The result is a matrix where each

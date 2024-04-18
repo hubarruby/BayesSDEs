@@ -1,10 +1,9 @@
-import numpy as np
 import argparse
 from scipy.stats import truncnorm
 import pickle
 import os
 
-from .fredholm_datagen_utils import create_data, b1_v, b2_v, b_bar
+from .fredholm_datagen_utils import *
 from .fredholm_utils import FredholmGlobLoc
 
 def parse_args():
@@ -33,8 +32,8 @@ def parse_args():
     parser.add_argument('--integral_n', type=int, default=5000, help='Number of integral points.')
     parser.add_argument('--y_domain', type=float, nargs=2, default=[-1000, 1000],
                         help='Domain for the Y variable as low, high.')
-    parser.add_argument('--b_function', type=str, choices=['b1_v', 'b2_v'], default='b1_v',
-                        help='The b function to use in the simulation (b1_v or b2_v).')
+    parser.add_argument('--b_function', type=str, choices=['b1_v', 'b2_v', 'b_gamma1', 'b_gamma2'],
+                        default='b1_v', help='The b function to use in the simulation (b1_v or b2_v).')
     parser.add_argument('--local_gig_a', type=float, default=2, help='"a" parameter for the local GIG distribution.')
     parser.add_argument('--local_gig_b', type=float, default=0, help='"b" parameter for the local GIG distribution.')
     parser.add_argument('--local_gig_p', type=float, default=1, help='"p" parameter for the local GIG distribution.')
@@ -58,7 +57,9 @@ def parse_args():
 
 function_map = {
     'b1_v': b1_v,
-    'b2_v': b2_v
+    'b2_v': b2_v,
+    'gamma1_v': b_gamma1,
+    'gamma2_v': b_gamma2
 }
 
 
