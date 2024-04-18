@@ -115,7 +115,7 @@ class FredSimulation:
     """
     def __init__(self, results_filepath, pi='truncnorm', scale=np.sqrt(10), loc=1, a_trunc=-100, b_trunc=100,
                  beta_distribution_a=3, beta_distribution_b=2, diffusion=1, t_delta=0.05, t_end=100, start_val=0,
-                 gibbs_iters=40, chunk_size=150, integral_n=5000, y_domain=(-100, 100), b=b1_v, a_loc=2, b_loc=0,
+                 gibbs_iters=40, chunk_size=150, integral_n=5000, y_domain=(-100, 100), b=b1, a_loc=2, b_loc=0,
                  p_loc=1, a_glob=2, b_glob=0, p_glob=1, kernel_name='gauss', timer=True, matrix_calc='scipy'):
         """
         Initialize a simulation instance with specified parameters for running Fredholm SDE learning simulations.
