@@ -123,6 +123,70 @@ def b2_v(x, y):
 
     return result
 
+def b_gamma1(x, y):
+    """
+    Computes the value of gamma for each combination of elements in vectors (or numpy arrays) of x and y values,
+    or a single value of x and y, according to the formula 9/(x + y^2) - 5. The result is a matrix where each
+    row corresponds to an x and each column to a y, or a single value if x and y are both scalars.
+
+    Parameters:
+    - x (numpy.array or float): A vector (numpy array) of x values or a single float value.
+    - y (numpy.array or float): A vector (numpy array) of y values or a single float value.
+
+    Returns:
+    - numpy.array or float: A 2D array where each element [i, j] is the result of 9/(x[i] + y[j]^2) - 5,
+      or a single value if x and y are both scalars.
+    """
+    # Check if x and y are scalars
+    if np.isscalar(x) and np.isscalar(y):
+        # Direct computation for scalars
+        result = 9 / (x + y ** 2) - 5
+    else:
+        # Ensure x and y are numpy arrays for broadcasting
+        x = np.asarray(x)
+        y = np.asarray(y)
+
+        # Check dimensions and reshape x to a column vector for broadcasting if necessary
+        if np.ndim(x) == 1:
+            x = x[:, np.newaxis]
+
+        # Apply the new formula
+        result = 9 / (x + y ** 2) - 5
+
+    return result
+
+
+def gamma2_v(x, y):
+    """
+    Computes the value of gamma2 for each combination of elements in vectors (or numpy arrays) of x and y values,
+    or a single value of x and y, according to the formula (9/x - 5)*y. The result is a matrix where each
+    row corresponds to an x and each column to a y, or a single value if x and y are both scalars.
+
+    Parameters:
+    - x (numpy.array or float): A vector (numpy array) of x values or a single float value.
+    - y (numpy.array or float): A vector (numpy array) of y values or a single float value.
+
+    Returns:
+    - numpy.array or float: A 2D array where each element [i, j] is the result of (9/x[i] - 5)*y[j],
+      or a single value if x and y are both scalars.
+    """
+    # Check if x and y are scalars
+    if np.isscalar(x) and np.isscalar(y):
+        # Direct computation for scalars
+        result = (9 / x - 5) * y
+    else:
+        # Ensure x and y are numpy arrays for broadcasting
+        x = np.asarray(x)
+        y = np.asarray(y)
+
+        # Check dimensions and reshape x to a column vector for broadcasting if necessary
+        if np.ndim(x) == 1:
+            x = x[:, np.newaxis]
+
+        # Apply the formula
+        result = (9 / x - 5) * y
+
+    return result
 
 # calculation of the integral
 def b_bar_v(x, b, pi, integral_n=1000):
