@@ -205,7 +205,7 @@ class FredSimulation:
                            global_gig_p=self._global_gig_p, kernel_name=self.kernel_name, timer=self.timer),
             beta_record=fred_glob_loc_obj.beta_record, y_domain=fred_glob_loc_obj.y_domain,
             init_data=fred_glob_loc_obj.init_data, known_b=fred_glob_loc_obj.known_b,
-            diffusion=fred_glob_loc_obj.diffusion)
+            diffusion=fred_glob_loc_obj.diffusion, b_mat=fred_glob_loc_obj.b_mat)
 
         os.makedirs(os.path.dirname(self.results_filepath), exist_ok=True)
 

@@ -302,6 +302,8 @@ class FredholmGlobLoc:
         a_glob = self._global_gig_a  # tau
         b_glob = self._global_gig_b  # tau
         p_glob = self._global_gig_p  # tau
+        print('a_loc', a_loc, 'b_loc', b_loc, 'p loc', p_loc)
+        print('a_glob', a_glob, 'b_glob', b_glob, 'p glob', p_glob)
 
         if matrix_calc == 'chunked':
             b_int = self.get_b_integral_v_chunked()
@@ -333,7 +335,7 @@ class FredholmGlobLoc:
         for i in range(self.gibbs_iters):
             # draw a diagonal matrix of lambda^2
             np.fill_diagonal(lambda_mat,
-                             [gig_rvs(a_loc, (1 / tau) * (beta[i] ** 2 + b_loc), p_loc - 1 / 2 - 1, 1) for i in
+                             [gig_rvs(a_loc, (1 / tau) * (beta[i] ** 2) + b_loc, p_loc - 1 / 2 - 1, 1) for i in
                               range(data_len - 1)])
 
             # lambda then informs the distribution of tau
@@ -348,7 +350,7 @@ class FredholmGlobLoc:
             # the beta comes from a multivariate normal
             beta = np.random.multivariate_normal(mu, c_mat)
 
-            # keeping track of things here
+            # keeping track of progress here
             if verbose:
                 if i % 25 == 0:
                     print(f'step {i}/{self.gibbs_iters} completed')
