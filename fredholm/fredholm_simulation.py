@@ -58,8 +58,8 @@ def parse_args():
 function_map = {
     'b1_v': b1_v,
     'b2_v': b2_v,
-    'gamma1_v': b_gamma1,
-    'gamma2_v': b_gamma2
+    'b_gamma1': b_gamma1,
+    'b_gamma2': b_gamma2
 }
 
 
