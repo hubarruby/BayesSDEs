@@ -6,7 +6,7 @@ from scipy import integrate
 from helpers.utils import gig_rvs
 
 
-def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_domain, int_N=5000, chunk_size=100):
+def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_domain, int_n=5000, chunk_size=100):
     """
     function for computing the matrix for estimate b_mat, over a particular linspace (usually for plotting/MSE calculation purposes)
     :param range_linspace:
@@ -14,21 +14,21 @@ def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_do
     :param kernel:
     :param known_b:
     :param y_domain:
-    :param int_N:
+    :param int_n:
     :return:
     """
     # y_domain is the range from which to randomly sample (ie [-1000, 1000] in example 3.1)
-    # int_N is the size of sampling for conducting the integration
+    # int_n is the size of sampling for conducting the integration
 
     # for ease of writing code, defining the linspace such that it has the same number of points as the init_data
     linspace_vals = np.linspace(range_linspace[0], range_linspace[1], len(init_data))
 
     # Chunking init_data processing
     n_total = len(init_data) - 1
-    N = int_N
+    N = int_n
     b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
-    y_z = np.random.uniform(y_domain[0], y_domain[1], size=(int_N, 2)).astype(np.float32)
+    y_z = np.random.uniform(y_domain[0], y_domain[1], size=(int_n, 2)).astype(np.float32)
     kern_vals = np.diag(kernel(y_z[:, 0], y_z[:, 1])).astype(np.float32)
 
     for start_idx_i in range(0, n_total, chunk_size):
@@ -60,22 +60,22 @@ def estimated_b_function_mat_calc(b_ij, betas):
 
 
 # 1D version of the B estimation
-def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_N=5000):
+def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000):
     """
     function for computing a single estimate b_mat
     val: float
     y_rvs: is a scipy.stats sampling method (must have a callable .rvs())
-    int_N is the size of sampling for conducting the integration
+    int_n is the size of sampling for conducting the integration
     """
 
     # for ease of writing code, defining the linspace such that it has the same number of points as the init_data
-    y_z = y_rvs.rvs(size=(int_N, 2)).astype(np.float32)
+    y_z = y_rvs.rvs(size=(int_n, 2)).astype(np.float32)
     kern_vals = np.diag(kernel(y_z[:, 0], y_z[:, 1])).astype(np.float32)
     # print(kern_vals.shape)
 
     # Chunking init_data processing
     n_total = len(init_data) - 1
-    N = int_N
+    N = int_n
 
     # Compute b_y and b_z
     b_y = known_b(val, y_z[:, 0]).astype(np.float32)  # shape (N,)
@@ -93,8 +93,8 @@ def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_N=5000
     return b_vec
 
 
-def b1_est_func_vect_calc(val, betas, init_data, kernel, known_b, y_rvs, int_N=5000):
-    return betas @ estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_N=5000)
+def b1_est_func_vect_calc(val, betas, init_data, kernel, known_b, y_rvs, int_n=5000):
+    return betas @ estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000)
 
 
 # a class for running, different priors for the SDE estimation usign the Fredholm Method
@@ -113,7 +113,7 @@ class FredholmGlobLoc:
                  a_glob=2,  # tau
                  b_glob=0,  # tau
                  p_glob=1,  # tau
-                 int_N=5000,  # number of values to generate when numerically estimated the b integral
+                 int_n=5000,  # number of values to generate when numerically estimated the b integral
                  chunk_size=100,
                  timer=True
                  ):
@@ -133,7 +133,7 @@ class FredholmGlobLoc:
         self.beta_record = []
         self.t_delta = t_delta
         self.chunk_size = chunk_size
-        self.int_N = int_N
+        self.int_n = int_n
         self.timer=timer
         self.b_mat = None
 
@@ -190,7 +190,7 @@ class FredholmGlobLoc:
     def get_b_integral(self):
         start_time = time.time()
         # create y and z samples for calculating the integral
-        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_N, 2))
+        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2))
         # calculate the kernel for each of these y and z values together
         kern_vals = np.diag(self._kernel(y_z[:, 0], y_z[:, 1]))
 
@@ -203,7 +203,7 @@ class FredholmGlobLoc:
                 dz_b_result = self.known_b(xj, y_z[:, 1])
                 # if i==0: print(kern_vals.shape, dy_b_result.shape, dz_b_result.shape)
                 elementise_mult = dy_b_result * dz_b_result * kern_vals
-                b_int[i, j] = np.sum(elementise_mult) / self.int_N
+                b_int[i, j] = np.sum(elementise_mult) / self.int_n
         # print('done making B')
         # print(b_int.shape)
         self.b_mat = np.array(b_int)
@@ -215,13 +215,13 @@ class FredholmGlobLoc:
 
     def get_b_integral_v_chunked(self):
         # Create y and z samples for calculating the integral
-        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_N, 2)).astype(np.float32)
+        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2)).astype(np.float32)
         kern_vals = np.diag(self._kernel(y_z[:, 0], y_z[:, 1])).astype(np.float32)
 
         # Chunking init_data processing
         chunk_size = self.chunk_size
         n_total = len(self.init_data) - 1
-        N = self.int_N
+        N = self.int_n
         b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
         for start_idx_i in range(0, n_total, chunk_size):
@@ -399,7 +399,7 @@ class FredholmOptimize:
                  y_domain,
                  kernel_name='gauss',
                  t_delta=0.05,
-                 int_N=5000,  # number of values to generate when numerically estimated the b integral
+                 int_n=5000,  # number of values to generate when numerically estimated the b integral
                  chunk_size=100  # for calculating the B Integral
                  ):
         self.init_data = init_data
@@ -408,7 +408,7 @@ class FredholmOptimize:
         self._kernel = self._set_kernel(kernel_name)
         self.diffusion = diffusion
         self.t_delta = t_delta
-        self.int_N = int_N
+        self.int_n = int_n
         self.chunk_size = chunk_size
         self.b_mat = None
         self.optimal_beta = None  # this is referred to as c in the Fredholm note
@@ -466,7 +466,7 @@ class FredholmOptimize:
     def get_b_integral(self):
         start_time = time.time()
         # create y and z samples for calculating the integral
-        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_N, 2))
+        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2))
         # calculate the kernel for each of these y and z values together
         kern_vals = np.diag(self._kernel(y_z[:, 0], y_z[:, 1]))
 
@@ -479,7 +479,7 @@ class FredholmOptimize:
                 dz_b_result = self.known_b(xj, y_z[:, 1])
                 # if i==0: print(kern_vals.shape, dy_b_result.shape, dz_b_result.shape)
                 elementise_mult = dy_b_result * dz_b_result * kern_vals
-                b_int[i, j] = np.sum(elementise_mult) / self.int_N
+                b_int[i, j] = np.sum(elementise_mult) / self.int_n
         # print('done making B')
         print(b_int.shape)
         self.b_mat = np.array(b_int)
@@ -491,13 +491,13 @@ class FredholmOptimize:
 
     def get_b_integral_v_chunked(self):
         # Create y and z samples for calculating the integral
-        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_N, 2)).astype(np.float32)
+        y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2)).astype(np.float32)
         kern_vals = np.diag(self._kernel(y_z[:, 0], y_z[:, 1])).astype(np.float32)
 
         # Chunking init_data processing
         chunk_size = self.chunk_size
         n_total = len(self.init_data) - 1
-        N = self.int_N
+        N = self.int_n
         b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
         for start_idx_i in range(0, n_total, chunk_size):

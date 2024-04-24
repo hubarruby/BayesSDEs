@@ -64,7 +64,6 @@ def parse_args():
     args.y_domain = tuple(args.y_domain)
     return args
 
-
 function_map = {
     'b1': b1,
     'b2': b2,
