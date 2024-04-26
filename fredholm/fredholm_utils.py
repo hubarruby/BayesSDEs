@@ -7,6 +7,9 @@ from helpers.utils import gig_rvs
 
 
 def set_kernel(kernel_name, **kwargs):
+    if not isinstance(kernel_name, str):
+        raise TypeError("kernel_name must be a string")
+
     if kernel_name.lower() == 'gauss':
         def kern(x, y):
             """
@@ -50,6 +53,7 @@ def set_kernel(kernel_name, **kwargs):
 
     if kernel_name.lower() == 'poly':
         order = kwargs.get('poly_order', 3)
+
         def kern(x, y):
             return np.exp(-abs(x - y) / np.sqrt(2))(x * y + 1) ** order
 
@@ -91,7 +95,8 @@ def set_kernel(kernel_name, **kwargs):
         return kern
 
 
-def estimated_b_function_matrix(range_linspace, init_data, kernel_name, known_b, y_domain, int_n=5000, chunk_size=100):
+def estimated_b_function_matrix(range_linspace, init_data, kernel_name, known_b, y_domain, int_n=5000, chunk_size=100,
+                                **kwargs):
     """
     function for computing the matrix for estimate b_mat, over a particular linspace
         (usually for plotting/MSE calculation purposes)
@@ -107,7 +112,7 @@ def estimated_b_function_matrix(range_linspace, init_data, kernel_name, known_b,
     # set the kernel function based on the string input
     # check if the variable kernel is a string or raise type error if not
     # code here
-    kernel = set_kernel(kernel_name)
+    kernel = set_kernel(kernel_name, **kwargs)
 
     # y_domain is the range from which to randomly sample (ie [-1000, 1000] in example 3.1)
     # int_n is the size of sampling for conducting the integration
@@ -153,13 +158,16 @@ def estimated_b_function_mat_calc(b_ij, betas):
 
 
 # 1D version of the B estimation
-def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000):
+def estimated_b_function_vect(val, init_data, kernel_name, known_b, y_rvs, int_n=5000, **kwargs):
     """
     function for computing a single estimate b_mat
     val: float
     y_rvs: is a scipy.stats sampling method (must have a callable .rvs())
     int_n is the size of sampling for conducting the integration
     """
+
+    # get the kernel based on the string name passed
+    kernel = set_kernel(kernel_name, **kwargs)
 
     # for ease of writing code, defining the linspace such that it has the same number of points as the init_data
     y_z = y_rvs.rvs(size=(int_n, 2)).astype(np.float32)
@@ -185,7 +193,8 @@ def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000
     return b_vec
 
 
-def b1_est_func_vect_calc(val, betas, init_data, kernel, known_b, y_rvs, int_n=5000):
+def b1_est_func_vect_calc(val, betas, init_data, kernel_name, known_b, y_rvs, int_n=5000, **kwargs):
+    kernel = set_kernel(kernel_name, **kwargs)
     return betas @ estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=int_n)
 
 
@@ -207,7 +216,8 @@ class FredholmGlobLoc:
                  p_glob=1,  # tau
                  int_n=5000,  # number of values to generate when numerically estimated the b integral
                  chunk_size=100,
-                 timer=True
+                 timer=True,
+                 **kwargs
                  ):
         self._local_gig_a = a_loc  # desired low shrinkage
         self._local_gig_b = b_loc
@@ -216,7 +226,7 @@ class FredholmGlobLoc:
         self._global_gig_b = b_glob  # For the case where we only want one prior, we ignore the global.
         self._global_gig_p = p_glob  # Instead, set them all to 0 to make the gibbs process only use the local params.
         self.init_data = init_data
-        self._kernel = set_kernel(kernel_name)
+        self._kernel = set_kernel(kernel_name, **kwargs)
         self.known_b = known_b
         self.y_domain = y_domain
         self.gibbs_iters = gibbs_iters
@@ -403,39 +413,6 @@ class FredholmGlobLoc:
             self.beta_record.append(beta)
 
 
-def gauss_kernel(x, y):
-    """
-    Computes the Gaussian kernel exp(-((x - y)^2) / 2) for each combination of elements
-    in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
-    a matrix when both x and y are vectors, a vector when one of them is a scalar, and
-    a scalar when both are scalars.
-
-    Args:
-    - x (numpy.array or scalar): Input vector or scalar x.
-    - y (numpy.array or scalar): Input vector or scalar y.
-
-    Returns:
-    - numpy.array or scalar: Gaussian kernel values.
-    """
-    # Wrap x and y in arrays if they are scalars
-    x = np.atleast_1d(x)
-    y = np.atleast_1d(y)
-
-    # Broadcasting x and y to form all pairs (x[i] - y[j])
-    x_expanded = x[:, np.newaxis]
-    y_expanded = y[np.newaxis, :]
-
-    # Applying the Gaussian kernel to each pair
-    result = np.exp(-((x_expanded - y_expanded) ** 2) / 2)
-
-    # Return result in original shape (scalar if both inputs were scalars)
-    if result.size == 1:
-        return result.item()  # Return as scalar
-    elif len(x) == 1 or len(y) == 1:
-        return result.flatten()  # Return 1D array if one input was scalar
-    return result
-
-
 def multiplicative_exponential_kernel(x, y):
     """
     Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
@@ -478,12 +455,13 @@ class FredholmOptimize:
                  kernel_name='gauss',
                  t_delta=0.05,
                  int_n=5000,  # number of values to generate when numerically estimated the b integral
-                 chunk_size=100  # for calculating the B Integral
+                 chunk_size=100,  # for calculating the B Integral
+                 **kwargs
                  ):
         self.init_data = init_data
         self.known_b = known_b
         self.y_domain = y_domain
-        self._kernel = set_kernel(kernel_name)
+        self._kernel = set_kernel(kernel_name, **kwargs)
         self.diffusion = diffusion
         self.t_delta = t_delta
         self.int_n = int_n

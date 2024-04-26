@@ -50,8 +50,8 @@ def parse_args():
     parser.add_argument('--global_gig_a', type=float, default=2, help='"a" parameter for the global GIG distribution.')
     parser.add_argument('--global_gig_b', type=float, default=0, help='"b" parameter for the global GIG distribution.')
     parser.add_argument('--global_gig_p', type=float, default=1, help='"p" parameter for the global GIG distribution.')
-    parser.add_argument('--kernel_name', type=str, default='gauss',
-                        help='Name of the kernel function used in calculations.')
+    parser.add_argument('--kernel_name', type=str, default='gauss', help='Name of the kernel function '
+                        'used in calculations. Can be "gauss", "poly", "laplace, or "mult_exp"')
     parser.add_argument('--timer', type=bool, default=True,
                         help='Whether to display time estimates throughout the simulation process.')
     parser.add_argument('--matrix_calc', type=str, default='scipy',
