@@ -69,6 +69,12 @@ def compare_betas(dict_list, beta_idx=-1, kurt=True, **kwargs):
     plt.show()
 
 
+def plot_data_histogram(dict_list, **kwargs):
+    plt.hist(dict_list[0]['init_data'], **kwargs)
+    plt.title(f'Distribution of Training Data (from func: \'{dict_list[0]["known_b"].__name__}\')')
+    plt.show()
+
+
 def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bbar_integral=True, integral_n=5000,
                         bbar_manual=None, bbar_manual_name=None, y_lim=None):
     """
