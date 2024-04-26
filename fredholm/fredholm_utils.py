@@ -8,13 +8,15 @@ from helpers.utils import gig_rvs
 
 def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_domain, int_n=5000, chunk_size=100):
     """
-    function for computing the matrix for estimate b_mat, over a particular linspace (usually for plotting/MSE calculation purposes)
+    function for computing the matrix for estimate b_mat, over a particular linspace
+        (usually for plotting/MSE calculation purposes)
     :param range_linspace:
     :param init_data:
     :param kernel:
     :param known_b:
     :param y_domain:
     :param int_n:
+    :param chunk_size:
     :return:
     """
     # y_domain is the range from which to randomly sample (ie [-1000, 1000] in example 3.1)
@@ -25,7 +27,7 @@ def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_do
 
     # Chunking init_data processing
     n_total = len(init_data) - 1
-    N = int_n
+    n = int_n
     b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
     y_z = np.random.uniform(y_domain[0], y_domain[1], size=(int_n, 2)).astype(np.float32)
@@ -47,15 +49,16 @@ def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_do
 
             b_chunk = mb_y * mb_z * kern_vals
 
-            # Sum over the N dimension (the integral approximation) and accumulate
-            b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / N
+            # Sum over the n dimension (the integral approximation) and accumulate
+            b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / n
 
     b_mat = b_aggregated
     return b_mat
 
 
 def estimated_b_function_mat_calc(b_ij, betas):
-    # now we use the betas and multiply them into the matrix along the columns axis (since j is columns, and each beta (or c) corresponds to a j value
+    # now we use the betas and multiply them into the matrix along the columns axis
+    # (since j is columns, and each beta (or c) corresponds to a j value
     return np.matmul(b_ij, betas)
 
 
@@ -74,12 +77,11 @@ def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000
     # print(kern_vals.shape)
 
     # Chunking init_data processing
-    n_total = len(init_data) - 1
-    N = int_n
+    n = int_n
 
     # Compute b_y and b_z
-    b_y = known_b(val, y_z[:, 0]).astype(np.float32)  # shape (N,)
-    b_z = known_b(np.asarray(init_data, dtype=np.float32), y_z[:, 1]).astype(np.float32)  # shape (n, N)
+    b_y = known_b(val, y_z[:, 0]).astype(np.float32)  # shape (n,)
+    b_z = known_b(np.asarray(init_data, dtype=np.float32), y_z[:, 1]).astype(np.float32)  # shape (n_total, n)
 
     # mb_y = b_y[:, np.newaxis]
     # mb_z = b_z[np.newaxis, :]
@@ -87,14 +89,14 @@ def estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000
     b = b_y * b_z * kern_vals  # try doing this with built-in broadcasting in numpy
     # print(b.shape)
     #
-    # # Sum over the N dimension (the integral approximation) and accumulate
-    b_vec = np.sum(b, axis=1)[:-1] / N
+    # # Sum over the n dimension (the integral approximation) and accumulate
+    b_vec = np.sum(b, axis=1)[:-1] / n
 
     return b_vec
 
 
 def b1_est_func_vect_calc(val, betas, init_data, kernel, known_b, y_rvs, int_n=5000):
-    return betas @ estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=5000)
+    return betas @ estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=int_n)
 
 
 # a class for running, different priors for the SDE estimation usign the Fredholm Method
@@ -121,8 +123,8 @@ class FredholmGlobLoc:
         self._local_gig_b = b_loc
         self._local_gig_p = p_loc
         self._global_gig_a = a_glob  # desired high shrinkage.
-        self._global_gig_b = b_glob # For the case where we only want one prior, we ignore the global.
-        self._global_gig_p = p_glob # Instead, set them all to 0 to make the gibbs process only use the local params.
+        self._global_gig_b = b_glob  # For the case where we only want one prior, we ignore the global.
+        self._global_gig_p = p_glob  # Instead, set them all to 0 to make the gibbs process only use the local params.
         self.init_data = init_data
         self._kernel = self._set_kernel(kernel_name)
         self.known_b = known_b
@@ -134,11 +136,12 @@ class FredholmGlobLoc:
         self.t_delta = t_delta
         self.chunk_size = chunk_size
         self.int_n = int_n
-        self.timer=timer
+        self.timer = timer
         self.b_mat = None
 
     # Using the specifications from initialization to set the kernel for the object
-    def _set_kernel(self, kernel_name):
+    @staticmethod
+    def _set_kernel(kernel_name):
         if kernel_name.lower() == 'gauss':
             def kern(x, y):
                 """
@@ -178,6 +181,7 @@ class FredholmGlobLoc:
             def kern(x, y): return np.exp(-abs(x - y) / np.sqrt(2))
 
             return kern
+
         if kernel_name.lower() == 'poly':
             order = 3  # TODO: add a way to specify this order when defining the class
 
@@ -185,10 +189,45 @@ class FredholmGlobLoc:
 
             return kern
 
+        if kernel_name.lower() == 'mult_exp':
+            def kern(x, y):
+                """
+                Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
+                in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
+                a matrix when both x and y are vectors, a vector when one of them is a scalar, and
+                a scalar when both are scalars.
+
+                Args:
+                - x (numpy.array or scalar): Input vector or scalar x.
+                - y (numpy.array or scalar): Input vector or scalar y.
+
+                Returns:
+                - numpy.array or scalar: multiplicative exponential kernel values.
+                """
+                # Wrap x and y in arrays if they are scalars
+                x = np.atleast_1d(x)
+                y = np.atleast_1d(y)
+
+                # Broadcasting x and y to form all pairs (x[i] - y[j])
+                x_expanded = x[:, np.newaxis]
+                y_expanded = y[np.newaxis, :]
+
+                # Applying the kernel to each pair
+                result = np.exp(- (x_expanded ** 2 + y_expanded ** 2) / 2)
+
+                # Return result in original shape (scalar if both inputs were scalars)
+                if result.size == 1:
+                    return result.item()  # Return as scalar
+                elif len(x) == 1 or len(y) == 1:
+                    return result.flatten()  # Return 1D array if one input was scalar
+                return result
+
+            return kern
+
     # define the matrix of b_integrals (matrix output with a value for each possible pair of data points in init_data)
     # this is the slow version of the
     def get_b_integral(self):
-        start_time = time.time()
+        # start_time = time.time()
         # create y and z samples for calculating the integral
         y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2))
         # calculate the kernel for each of these y and z values together
@@ -197,7 +236,8 @@ class FredholmGlobLoc:
         b_int = np.zeros((len(self.init_data) - 1, len(self.init_data) - 1))
         # doing this as a loop first to make it easier to conceptualize
         for i, xi in enumerate(self.init_data[:-1]):
-            if i % 10 == 0: print(f'For B, at outer loop point {i + 1}/{len(self.init_data) + 1} in init_data')
+            if i % 10 == 0:
+                print(f'For B, at outer loop point {i + 1}/{len(self.init_data) + 1} in init_data')
             for j, xj in enumerate(self.init_data[:-1]):
                 dy_b_result = self.known_b(xi, y_z[:, 0])
                 dz_b_result = self.known_b(xj, y_z[:, 1])
@@ -207,9 +247,9 @@ class FredholmGlobLoc:
         # print('done making B')
         # print(b_int.shape)
         self.b_mat = np.array(b_int)
-        end_time = time.time()
+        # end_time = time.time()
         # Calculate the total time taken and print it
-        total_time = end_time - start_time
+        # total_time = end_time - start_time
         # print(f"Total time taken for non-vectorized B gen: {total_time} seconds")
         return np.array(b_int)
 
@@ -221,7 +261,7 @@ class FredholmGlobLoc:
         # Chunking init_data processing
         chunk_size = self.chunk_size
         n_total = len(self.init_data) - 1
-        N = self.int_n
+        n = self.int_n
         b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
         for start_idx_i in range(0, n_total, chunk_size):
@@ -239,8 +279,8 @@ class FredholmGlobLoc:
 
                 b_chunk = mb_y * mb_z * kern_vals
 
-                # Sum over the N dimension (the integral approximation) and accumulate
-                b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / N
+                # Sum over the n dimension (the integral approximation) and accumulate
+                b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / n
 
         self.b_mat = b_aggregated
         return b_aggregated
@@ -258,7 +298,8 @@ class FredholmGlobLoc:
                 progress = (coi + 1) / n_total
                 estimated_total_time = elapsed_time / progress
                 remaining_time = estimated_total_time - elapsed_time
-                print(f"Elapsed time: {elapsed_time/60:.2f} min, Estimated total time: {estimated_total_time/60:.2f} min, Remaining time: {remaining_time/60:.2f} min")
+                print(f"Elapsed time: {elapsed_time/60:.2f} min, Estimated total time: "
+                      f"{estimated_total_time/60:.2f} min, Remaining time: {remaining_time/60:.2f} min")
 
             for coj, xj in enumerate(self.init_data[:-1]):
                 b_mat[coi, coj] = integrate.dblquad(
@@ -291,7 +332,8 @@ class FredholmGlobLoc:
         return theta
 
     # outputs the vector of mean values for each beta_i
-    def get_mu_vector(self, c_mat, b_int, d_mat, theta):
+    @staticmethod
+    def get_mu_vector(c_mat, b_int, d_mat, theta):
         mu = c_mat @ b_int.T @ d_mat @ theta
         return mu
 
@@ -319,7 +361,7 @@ class FredholmGlobLoc:
 
         # initialize tau (semi-randomly)
         if a_glob == b_glob == p_glob == 0:
-            #in this case, we are not using global priors so tau is not modified during the gibbs process
+            # in this case, we are not using global priors so tau is not modified during the gibbs process
             global_prior = False
             tau = 1
         else:
@@ -329,8 +371,6 @@ class FredholmGlobLoc:
         beta = np.random.normal(0, 0.05, data_len - 1)  # a vector (beta coeffs)
         lambda_mat = np.identity(data_len - 1)
         theta = self.get_theta()
-
-        t_delta = self.t_delta
 
         for i in range(self.gibbs_iters):
             # draw a diagonal matrix of lambda^2
@@ -343,7 +383,7 @@ class FredholmGlobLoc:
                 [(1 / lamb) * (beta[i] ** 2) for i, lamb in enumerate(np.diagonal(lambda_mat))]) + b_glob,
                           p_glob - 1 / 2 - 1, 1) if global_prior else 1
 
-            # Now, using these, we sample beta
+            # now, using these, we sample beta
             eta = self.get_eta(lambda_mat, tau)
             c_mat = self.get_c_mat(b_int, d_mat, eta)  # covariance matrix of beta
             mu = self.get_mu_vector(c_mat, b_int, d_mat, theta)  # mean vector of beta
@@ -391,6 +431,39 @@ def gauss_kernel(x, y):
     return result
 
 
+def multiplicative_exponential_kernel(x, y):
+    """
+    Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
+    in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
+    a matrix when both x and y are vectors, a vector when one of them is a scalar, and
+    a scalar when both are scalars.
+
+    Args:
+    - x (numpy.array or scalar): Input vector or scalar x.
+    - y (numpy.array or scalar): Input vector or scalar y.
+
+    Returns:
+    - numpy.array or scalar: multiplicative exponential kernel values.
+    """
+    # Wrap x and y in arrays if they are scalars
+    x = np.atleast_1d(x)
+    y = np.atleast_1d(y)
+
+    # Broadcasting x and y to form all pairs (x[i] - y[j])
+    x_expanded = x[:, np.newaxis]
+    y_expanded = y[np.newaxis, :]
+
+    # Applying the kernel to each pair
+    result = np.exp(- (x_expanded ** 2 + y_expanded ** 2) / 2)
+
+    # Return result in original shape (scalar if both inputs were scalars)
+    if result.size == 1:
+        return result.item()  # Return as scalar
+    elif len(x) == 1 or len(y) == 1:
+        return result.flatten()  # Return 1D array if one input was scalar
+    return result
+
+
 class FredholmOptimize:
     def __init__(self,
                  init_data,
@@ -414,7 +487,8 @@ class FredholmOptimize:
         self.optimal_beta = None  # this is referred to as c in the Fredholm note
         self.optimization_history = None
 
-    def _set_kernel(self, kernel_name):
+    @staticmethod
+    def _set_kernel(kernel_name):
         if kernel_name.lower() == 'gauss':
             def kern(x, y):
                 """
@@ -454,6 +528,7 @@ class FredholmOptimize:
             def kern(x, y): return np.exp(-abs(x - y) / np.sqrt(2))
 
             return kern
+
         if kernel_name.lower() == 'poly':
             order = 3  # TODO: add a way to specify this order when defining the class
 
@@ -461,10 +536,45 @@ class FredholmOptimize:
 
             return kern
 
+        if kernel_name.lower() == 'mult_exp':
+            def kern(x, y):
+                """
+                Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
+                in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
+                a matrix when both x and y are vectors, a vector when one of them is a scalar, and
+                a scalar when both are scalars.
+
+                Args:
+                - x (numpy.array or scalar): Input vector or scalar x.
+                - y (numpy.array or scalar): Input vector or scalar y.
+
+                Returns:
+                - numpy.array or scalar: multiplicative exponential kernel values.
+                """
+                # Wrap x and y in arrays if they are scalars
+                x = np.atleast_1d(x)
+                y = np.atleast_1d(y)
+
+                # Broadcasting x and y to form all pairs (x[i] - y[j])
+                x_expanded = x[:, np.newaxis]
+                y_expanded = y[np.newaxis, :]
+
+                # Applying the kernel to each pair
+                result = np.exp(- (x_expanded ** 2 + y_expanded ** 2) / 2)
+
+                # Return result in original shape (scalar if both inputs were scalars)
+                if result.size == 1:
+                    return result.item()  # Return as scalar
+                elif len(x) == 1 or len(y) == 1:
+                    return result.flatten()  # Return 1D array if one input was scalar
+                return result
+
+            return kern
+
     # define the matrix of b_integrals (matrix output with a value for each possible pair of data points in init_data)
     # this is the slow version of the
     def get_b_integral(self):
-        start_time = time.time()
+        # start_time = time.time()
         # create y and z samples for calculating the integral
         y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2))
         # calculate the kernel for each of these y and z values together
@@ -473,7 +583,8 @@ class FredholmOptimize:
         b_int = np.zeros((len(self.init_data) - 1, len(self.init_data) - 1))
         # doing this as a loop first to make it easier to conceptualize
         for i, xi in enumerate(self.init_data[:-1]):
-            if i % 10 == 0: print(f'For B, at outer loop point {i + 1}/{len(self.init_data) + 1} in init_data')
+            if i % 10 == 0:
+                print(f'For B, at outer loop point {i + 1}/{len(self.init_data) + 1} in init_data')
             for j, xj in enumerate(self.init_data[:-1]):
                 dy_b_result = self.known_b(xi, y_z[:, 0])
                 dz_b_result = self.known_b(xj, y_z[:, 1])
@@ -483,9 +594,9 @@ class FredholmOptimize:
         # print('done making B')
         print(b_int.shape)
         self.b_mat = np.array(b_int)
-        end_time = time.time()
+        # end_time = time.time()
         # Calculate the total time taken and print it
-        total_time = end_time - start_time
+        # total_time = end_time - start_time
         # print(f"Total time taken for non-vectorized B gen: {total_time} seconds")
         return np.array(b_int)
 
@@ -497,7 +608,7 @@ class FredholmOptimize:
         # Chunking init_data processing
         chunk_size = self.chunk_size
         n_total = len(self.init_data) - 1
-        N = self.int_n
+        n = self.int_n
         b_aggregated = np.zeros((n_total, n_total), dtype=np.float32)  # Placeholder for aggregated results
 
         for start_idx_i in range(0, n_total, chunk_size):
@@ -515,8 +626,8 @@ class FredholmOptimize:
 
                 b_chunk = mb_y * mb_z * kern_vals
 
-                # Sum over the N dimension (the integral approximation) and accumulate
-                b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / N
+                # Sum over the n dimension (the integral approximation) and accumulate
+                b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / n
 
         self.b_mat = b_aggregated
         return b_aggregated
@@ -538,16 +649,16 @@ class FredholmOptimize:
             b_int = self.get_b_integral_v_chunked()
         elif matrix_calc == 'long':
             b_int = self.get_b_integral()
-        D = self.get_diagonal_matrix()
+        d_mat = self.get_diagonal_matrix()
         theta = self.get_theta()
         dt = self.t_delta
 
         def f(c):
-            part1 = dt * (c.T @ b_int.T @ D @ b_int @ c)
-            part2 = 2 * (theta.T @ D @ b_int @ c)
+            part1 = dt * (c.T @ b_int.T @ d_mat @ b_int @ c)
+            part2 = 2 * (theta.T @ d_mat @ b_int @ c)
             part3 = np.linalg.norm(c)
             return part1 - part2 + part3
 
-        min_c = minimize(f, np.zeros(len(D)), **kwargs)
+        min_c = minimize(f, np.zeros(len(d_mat)), **kwargs)
         self.optimal_beta = min_c
         return min_c
