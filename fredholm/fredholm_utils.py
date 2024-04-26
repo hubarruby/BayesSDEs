@@ -6,19 +6,109 @@ from scipy import integrate
 from helpers.utils import gig_rvs
 
 
-def estimated_b_function_matrix(range_linspace, init_data, kernel, known_b, y_domain, int_n=5000, chunk_size=100):
+def set_kernel(kernel_name, **kwargs):
+    if kernel_name.lower() == 'gauss':
+        def kern(x, y):
+            """
+            Computes the Gaussian kernel exp(-((x - y)^2) / 2) for each combination of elements
+            in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
+            a matrix when both x and y are vectors, a vector when one of them is a scalar, and
+            a scalar when both are scalars.
+
+            Args:
+            - x (numpy.array or scalar): Input vector or scalar x.
+            - y (numpy.array or scalar): Input vector or scalar y.
+
+            Returns:
+            - numpy.array or scalar: Gaussian kernel values.
+            """
+            # Wrap x and y in arrays if they are scalars
+            x = np.atleast_1d(x)
+            y = np.atleast_1d(y)
+
+            # Broadcasting x and y to form all pairs (x[i] - y[j])
+            x_expanded = x[:, np.newaxis]
+            y_expanded = y[np.newaxis, :]
+
+            # Applying the Gaussian kernel to each pair
+            result = np.exp(-((x_expanded - y_expanded) ** 2) / 2)
+
+            # Return result in original shape (scalar if both inputs were scalars)
+            if result.size == 1:
+                return result.item()  # Return as scalar
+            elif len(x) == 1 or len(y) == 1:
+                return result.flatten()  # Return 1D array if one input was scalar
+            return result
+
+        return kern
+
+    if kernel_name.lower() == 'laplace':
+        def kern(x, y):
+            return np.exp(-abs(x - y) / np.sqrt(2))
+
+        return kern
+
+    if kernel_name.lower() == 'poly':
+        order = kwargs.get('poly_order', 3)
+        def kern(x, y):
+            return np.exp(-abs(x - y) / np.sqrt(2))(x * y + 1) ** order
+
+        return kern
+
+    if kernel_name.lower() == 'mult_exp':
+        def kern(x, y):
+            """
+            Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
+            in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
+            a matrix when both x and y are vectors, a vector when one of them is a scalar, and
+            a scalar when both are scalars.
+
+            Args:
+            - x (numpy.array or scalar): Input vector or scalar x.
+            - y (numpy.array or scalar): Input vector or scalar y.
+
+            Returns:
+            - numpy.array or scalar: multiplicative exponential kernel values.
+            """
+            # Wrap x and y in arrays if they are scalars
+            x = np.atleast_1d(x)
+            y = np.atleast_1d(y)
+
+            # Broadcasting x and y to form all pairs (x[i] - y[j])
+            x_expanded = x[:, np.newaxis]
+            y_expanded = y[np.newaxis, :]
+
+            # Applying the kernel to each pair
+            result = np.exp(- (x_expanded ** 2 + y_expanded ** 2) / 2)
+
+            # Return result in original shape (scalar if both inputs were scalars)
+            if result.size == 1:
+                return result.item()  # Return as scalar
+            elif len(x) == 1 or len(y) == 1:
+                return result.flatten()  # Return 1D array if one input was scalar
+            return result
+
+        return kern
+
+
+def estimated_b_function_matrix(range_linspace, init_data, kernel_name, known_b, y_domain, int_n=5000, chunk_size=100):
     """
     function for computing the matrix for estimate b_mat, over a particular linspace
         (usually for plotting/MSE calculation purposes)
     :param range_linspace:
     :param init_data:
-    :param kernel:
+    :param kernel_name: 'gauss' or 'mult_exp'
     :param known_b:
     :param y_domain:
     :param int_n:
     :param chunk_size:
     :return:
     """
+    # set the kernel function based on the string input
+    # check if the variable kernel is a string or raise type error if not
+    # code here
+    kernel = set_kernel(kernel_name)
+
     # y_domain is the range from which to randomly sample (ie [-1000, 1000] in example 3.1)
     # int_n is the size of sampling for conducting the integration
 
@@ -126,7 +216,7 @@ class FredholmGlobLoc:
         self._global_gig_b = b_glob  # For the case where we only want one prior, we ignore the global.
         self._global_gig_p = p_glob  # Instead, set them all to 0 to make the gibbs process only use the local params.
         self.init_data = init_data
-        self._kernel = self._set_kernel(kernel_name)
+        self._kernel = set_kernel(kernel_name)
         self.known_b = known_b
         self.y_domain = y_domain
         self.gibbs_iters = gibbs_iters
@@ -138,91 +228,6 @@ class FredholmGlobLoc:
         self.int_n = int_n
         self.timer = timer
         self.b_mat = None
-
-    # Using the specifications from initialization to set the kernel for the object
-    @staticmethod
-    def _set_kernel(kernel_name):
-        if kernel_name.lower() == 'gauss':
-            def kern(x, y):
-                """
-                Computes the Gaussian kernel exp(-((x - y)^2) / 2) for each combination of elements
-                in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
-                a matrix when both x and y are vectors, a vector when one of them is a scalar, and
-                a scalar when both are scalars.
-
-                Args:
-                - x (numpy.array or scalar): Input vector or scalar x.
-                - y (numpy.array or scalar): Input vector or scalar y.
-
-                Returns:
-                - numpy.array or scalar: Gaussian kernel values.
-                """
-                # Wrap x and y in arrays if they are scalars
-                x = np.atleast_1d(x)
-                y = np.atleast_1d(y)
-
-                # Broadcasting x and y to form all pairs (x[i] - y[j])
-                x_expanded = x[:, np.newaxis]
-                y_expanded = y[np.newaxis, :]
-
-                # Applying the Gaussian kernel to each pair
-                result = np.exp(-((x_expanded - y_expanded) ** 2) / 2)
-
-                # Return result in original shape (scalar if both inputs were scalars)
-                if result.size == 1:
-                    return result.item()  # Return as scalar
-                elif len(x) == 1 or len(y) == 1:
-                    return result.flatten()  # Return 1D array if one input was scalar
-                return result
-
-            return kern
-
-        if kernel_name.lower() == 'laplace':
-            def kern(x, y): return np.exp(-abs(x - y) / np.sqrt(2))
-
-            return kern
-
-        if kernel_name.lower() == 'poly':
-            order = 3  # TODO: add a way to specify this order when defining the class
-
-            def kern(x, y): return np.exp(-abs(x - y) / np.sqrt(2))(x * y + 1) ** order
-
-            return kern
-
-        if kernel_name.lower() == 'mult_exp':
-            def kern(x, y):
-                """
-                Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
-                in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
-                a matrix when both x and y are vectors, a vector when one of them is a scalar, and
-                a scalar when both are scalars.
-
-                Args:
-                - x (numpy.array or scalar): Input vector or scalar x.
-                - y (numpy.array or scalar): Input vector or scalar y.
-
-                Returns:
-                - numpy.array or scalar: multiplicative exponential kernel values.
-                """
-                # Wrap x and y in arrays if they are scalars
-                x = np.atleast_1d(x)
-                y = np.atleast_1d(y)
-
-                # Broadcasting x and y to form all pairs (x[i] - y[j])
-                x_expanded = x[:, np.newaxis]
-                y_expanded = y[np.newaxis, :]
-
-                # Applying the kernel to each pair
-                result = np.exp(- (x_expanded ** 2 + y_expanded ** 2) / 2)
-
-                # Return result in original shape (scalar if both inputs were scalars)
-                if result.size == 1:
-                    return result.item()  # Return as scalar
-                elif len(x) == 1 or len(y) == 1:
-                    return result.flatten()  # Return 1D array if one input was scalar
-                return result
-
-            return kern
 
     # define the matrix of b_integrals (matrix output with a value for each possible pair of data points in init_data)
     # this is the slow version of the
@@ -478,7 +483,7 @@ class FredholmOptimize:
         self.init_data = init_data
         self.known_b = known_b
         self.y_domain = y_domain
-        self._kernel = self._set_kernel(kernel_name)
+        self._kernel = set_kernel(kernel_name)
         self.diffusion = diffusion
         self.t_delta = t_delta
         self.int_n = int_n
@@ -486,90 +491,6 @@ class FredholmOptimize:
         self.b_mat = None
         self.optimal_beta = None  # this is referred to as c in the Fredholm note
         self.optimization_history = None
-
-    @staticmethod
-    def _set_kernel(kernel_name):
-        if kernel_name.lower() == 'gauss':
-            def kern(x, y):
-                """
-                Computes the Gaussian kernel exp(-((x - y)^2) / 2) for each combination of elements
-                in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
-                a matrix when both x and y are vectors, a vector when one of them is a scalar, and
-                a scalar when both are scalars.
-
-                Args:
-                - x (numpy.array or scalar): Input vector or scalar x.
-                - y (numpy.array or scalar): Input vector or scalar y.
-
-                Returns:
-                - numpy.array or scalar: Gaussian kernel values.
-                """
-                # Wrap x and y in arrays if they are scalars
-                x = np.atleast_1d(x)
-                y = np.atleast_1d(y)
-
-                # Broadcasting x and y to form all pairs (x[i] - y[j])
-                x_expanded = x[:, np.newaxis]
-                y_expanded = y[np.newaxis, :]
-
-                # Applying the Gaussian kernel to each pair
-                result = np.exp(-((x_expanded - y_expanded) ** 2) / 2)
-
-                # Return result in original shape (scalar if both inputs were scalars)
-                if result.size == 1:
-                    return result.item()  # Return as scalar
-                elif len(x) == 1 or len(y) == 1:
-                    return result.flatten()  # Return 1D array if one input was scalar
-                return result
-
-            return kern
-
-        if kernel_name.lower() == 'laplace':
-            def kern(x, y): return np.exp(-abs(x - y) / np.sqrt(2))
-
-            return kern
-
-        if kernel_name.lower() == 'poly':
-            order = 3  # TODO: add a way to specify this order when defining the class
-
-            def kern(x, y): return np.exp(-abs(x - y) / np.sqrt(2))(x * y + 1) ** order
-
-            return kern
-
-        if kernel_name.lower() == 'mult_exp':
-            def kern(x, y):
-                """
-                Computes the Kernel exp(-(x^2 + y^2) / 2) for each combination of elements
-                in x and y, which can be vectors (numpy arrays) or single scalar values. The result is
-                a matrix when both x and y are vectors, a vector when one of them is a scalar, and
-                a scalar when both are scalars.
-
-                Args:
-                - x (numpy.array or scalar): Input vector or scalar x.
-                - y (numpy.array or scalar): Input vector or scalar y.
-
-                Returns:
-                - numpy.array or scalar: multiplicative exponential kernel values.
-                """
-                # Wrap x and y in arrays if they are scalars
-                x = np.atleast_1d(x)
-                y = np.atleast_1d(y)
-
-                # Broadcasting x and y to form all pairs (x[i] - y[j])
-                x_expanded = x[:, np.newaxis]
-                y_expanded = y[np.newaxis, :]
-
-                # Applying the kernel to each pair
-                result = np.exp(- (x_expanded ** 2 + y_expanded ** 2) / 2)
-
-                # Return result in original shape (scalar if both inputs were scalars)
-                if result.size == 1:
-                    return result.item()  # Return as scalar
-                elif len(x) == 1 or len(y) == 1:
-                    return result.flatten()  # Return 1D array if one input was scalar
-                return result
-
-            return kern
 
     # define the matrix of b_integrals (matrix output with a value for each possible pair of data points in init_data)
     # this is the slow version of the
