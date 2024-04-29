@@ -6,12 +6,14 @@ import os
 from .fredholm_datagen_utils import *
 from .fredholm_utils import FredholmGlobLoc
 
+
 def parse_args():
     """
     Parse the command-line arguments for the Fredholm simulation.
 
     This function sets up and parses command-line arguments necessary for configuring the simulation.
-    The results, including various parameters of the distribution and simulation settings, will be saved to a specified file path.
+    The results, including various parameters of the distribution and simulation settings,
+    will be saved to a specified file path.
 
     Returns:
         argparse.Namespace: An object that contains the arguments and their values as attributes.
@@ -57,12 +59,15 @@ def parse_args():
     parser.add_argument('--matrix_calc', type=str, default='scipy',
                         help='Method for calculating the numeric integration of b. '
                              'Can be "chunked", "scipy", or "long".')
+    parser.add_argument('--optimization_lambda', type=float, default=1,
+                        help='lambda value for calculating optimal c')
 
     args = parser.parse_args()
     print("Parsed Arguments:", args)
     # Convert y_domain from string to tuple of integers
     args.y_domain = tuple(args.y_domain)
     return args
+
 
 function_map = {
     'b1': b1,
@@ -115,7 +120,8 @@ class FredSimulation:
     def __init__(self, results_filepath, pi='truncnorm', scale=np.sqrt(10), loc=1, a_trunc=-100, b_trunc=100,
                  beta_distribution_a=3, beta_distribution_b=2, diffusion=1, t_delta=0.05, t_end=100, start_val=0,
                  gibbs_iters=40, chunk_size=150, integral_n=5000, y_domain=(-100, 100), b=b1, a_loc=2, b_loc=0,
-                 p_loc=1, a_glob=2, b_glob=0, p_glob=1, kernel_name='gauss', timer=True, matrix_calc='scipy'):
+                 p_loc=1, a_glob=2, b_glob=0, p_glob=1, kernel_name='gauss', timer=True, matrix_calc='scipy',
+                 optimization_lambda=1):
         """
         Initialize a simulation instance with specified parameters for running Fredholm SDE learning simulations.
 
@@ -181,6 +187,7 @@ class FredSimulation:
         self.kernel_name = kernel_name
         self.timer = timer
         self.matrix_calc = matrix_calc
+        self.optimization_lambda = optimization_lambda
 
     def run_simulation(self):
         """
@@ -214,9 +221,11 @@ class FredSimulation:
                                             b_glob=self._global_gig_b,  # tau
                                             p_glob=self._global_gig_p,  # tau
                                             kernel_name=self.kernel_name,
-                                            timer=self.timer
+                                            timer=self.timer,
+                                            matrix_calc_method=self.matrix_calc,
+                                            optimization_lambda=self.optimization_lambda
                                             )
-        fred_glob_loc_obj.run_gibbs(matrix_calc=self.matrix_calc)
+        fred_glob_loc_obj.run_gibbs()
 
         fred_results_dict = dict(
             meta_data=dict(pi=self.pi, scale=self.scale, loc=self.loc, a_trunc=self.a_trunc, b_trunc=self.b_trunc,
@@ -226,11 +235,12 @@ class FredSimulation:
                            integral_n=self.integral_n, y_domain=self.y_domain, results_filepath=self.results_filepath,
                            local_gig_a=self._local_gig_a, local_gig_b=self._local_gig_b, local_gig_p=self._local_gig_p,
                            global_gig_a=self._global_gig_a, global_gig_b=self._global_gig_b,
-                           global_gig_p=self._global_gig_p, kernel_name=self.kernel_name, timer=self.timer),
+                           global_gig_p=self._global_gig_p, kernel_name=self.kernel_name, timer=self.timer,
+                           matrix_calc_method=self.matrix_calc, optimization_lambda=self.optimization_lambda),
             beta_record=fred_glob_loc_obj.beta_record, y_domain=fred_glob_loc_obj.y_domain,
             init_data=fred_glob_loc_obj.init_data, known_b=fred_glob_loc_obj.known_b,
             diffusion=fred_glob_loc_obj.diffusion, b_mat=fred_glob_loc_obj.b_mat,
-            lambda_record=fred_glob_loc_obj.lambda_mat_record)
+            lambda_record=fred_glob_loc_obj.lambda_mat_record, optimal_beta=fred_glob_loc_obj.optimal_beta)
 
         os.makedirs(os.path.dirname(self.results_filepath), exist_ok=True)
 
@@ -271,7 +281,8 @@ def main():
         p_glob=args.global_gig_p,
         kernel_name=args.kernel_name,
         timer=args.timer,
-        matrix_calc=args.matrix_calc
+        matrix_calc=args.matrix_calc,
+        optimization_lambda=args.optimization_lambda,
     )
     simulation.run_simulation()
 

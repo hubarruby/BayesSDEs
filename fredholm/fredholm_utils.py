@@ -194,11 +194,11 @@ def estimated_b_function_vect(val, init_data, kernel_name, known_b, y_rvs, int_n
 
 
 def b1_est_func_vect_calc(val, betas, init_data, kernel_name, known_b, y_rvs, int_n=5000, **kwargs):
-    kernel = set_kernel(kernel_name, **kwargs)
-    return betas @ estimated_b_function_vect(val, init_data, kernel, known_b, y_rvs, int_n=int_n)
+    return betas @ estimated_b_function_vect(val, init_data, kernel_name, known_b, y_rvs, int_n=int_n, **kwargs)
 
 
 # a class for running, different priors for the SDE estimation usign the Fredholm Method
+# noinspection PyUnboundLocalVariable
 class FredholmGlobLoc:
     def __init__(self,
                  init_data,
@@ -217,6 +217,8 @@ class FredholmGlobLoc:
                  int_n=5000,  # number of values to generate when numerically estimated the b integral
                  chunk_size=100,
                  timer=True,
+                 matrix_calc_method='chunked',
+                 optimization_lambda=1,
                  **kwargs
                  ):
         self._local_gig_a = a_loc  # desired low shrinkage
@@ -237,12 +239,18 @@ class FredholmGlobLoc:
         self.chunk_size = chunk_size
         self.int_n = int_n
         self.timer = timer
+        self.matrix_calc_method = matrix_calc_method  # not added elsewhere yet
+        self.optimization_lambda = optimization_lambda  # not added elsewhere yet
+        self.theta = None
+        self.d_mat = None
         self.b_mat = None
+        self.optimal_beta = self.get_optimal_beta()  # not added elsewhere (in the simulation returns) yet
 
     # define the matrix of b_integrals (matrix output with a value for each possible pair of data points in init_data)
     # this is the slow version of the
     def get_b_integral(self):
-        # start_time = time.time()
+        if self.timer:
+            start_time = time.time()
         # create y and z samples for calculating the integral
         y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2))
         # calculate the kernel for each of these y and z values together
@@ -263,12 +271,14 @@ class FredholmGlobLoc:
         # print(b_int.shape)
         self.b_mat = np.array(b_int)
         # end_time = time.time()
-        # Calculate the total time taken and print it
-        # total_time = end_time - start_time
-        # print(f"Total time taken for non-vectorized B gen: {total_time} seconds")
-        return np.array(b_int)
+        if self.timer:
+            end_time = time.time()
+            print(f'Time for B Matrix Calculation, Using "{self.matrix_calc_method}": {end_time - start_time:.2}')
+        return
 
     def get_b_integral_v_chunked(self):
+        if self.timer:
+            start_time = time.time()
         # Create y and z samples for calculating the integral
         y_z = np.random.uniform(self.y_domain[0], self.y_domain[1], size=(self.int_n, 2)).astype(np.float32)
         kern_vals = np.diag(self._kernel(y_z[:, 0], y_z[:, 1])).astype(np.float32)
@@ -298,13 +308,17 @@ class FredholmGlobLoc:
                 b_aggregated[start_idx_i:end_idx_i, start_idx_j:end_idx_j] += np.sum(b_chunk, axis=2) / n
 
         self.b_mat = b_aggregated
-        return b_aggregated
+        if self.timer:
+            end_time = time.time()
+            print(f'Time for B Matrix Calculation, Using "{self.matrix_calc_method}": {end_time - start_time:.2}')
+        return
 
     def get_b_integral_scipy(self):
+        if self.timer:
+            start_time = time.time()
         n_total = len(self.init_data) - 1
         # this version takes a lot longer than get_b_integral_v_chunked, but it is more accurate
         b_mat = np.zeros((n_total, n_total), dtype=np.float32)
-        start_time = time.time()
         for coi, xi in enumerate(self.init_data[:-1]):
             print(f'calculating b_integral values for row {coi}/{len(self.init_data[:-1])}')
             if self.timer:
@@ -313,21 +327,25 @@ class FredholmGlobLoc:
                 progress = (coi + 1) / n_total
                 estimated_total_time = elapsed_time / progress
                 remaining_time = estimated_total_time - elapsed_time
-                print(f"Elapsed time: {elapsed_time/60:.2f} min, Estimated total time: "
-                      f"{estimated_total_time/60:.2f} min, Remaining time: {remaining_time/60:.2f} min")
+                print(f"Elapsed time: {elapsed_time / 60:.2f} min, Estimated total time: "
+                      f"{estimated_total_time / 60:.2f} min, Remaining time: {remaining_time / 60:.2f} min")
 
             for coj, xj in enumerate(self.init_data[:-1]):
                 b_mat[coi, coj] = integrate.dblquad(
                     lambda y, z: self.known_b(xi, y) * self.known_b(xj, z) * self._kernel(y, z),
                     self.y_domain[0], self.y_domain[1], lambda z: self.y_domain[0], lambda z: self.y_domain[1])[0]
         self.b_mat = b_mat
-        return b_mat
+
+        if self.timer:
+            end_time = time.time()
+            print(f'Time for B Matrix Calculation, Using "{self.matrix_calc_method}": {end_time - start_time:.2}')
+        return
 
     # returns the variance matrix
     def get_diagonal_matrix(self):
         data_len = len(self.init_data) - 1
         d_mat = np.identity(data_len) * 1 / self.diffusion ** 2
-        return d_mat
+        self.d_mat = d_mat
 
     def get_eta(self, lambda_mat, tau):
         eta = np.identity(len(self.init_data) - 1)
@@ -335,24 +353,23 @@ class FredholmGlobLoc:
         eta = eta * tau  # since tau is a scalar this applies itself to the whole matrix (along the diag)
         return eta
 
-    def get_c_mat(self, b_int, d_mat, eta):
-        # print(type(b_int))
-        c_inv = self.t_delta * ((b_int.T @ d_mat) @ b_int) + np.linalg.inv(eta)
+    def get_c_mat(self, eta):
+        c_inv = self.t_delta * ((self.b_mat.T @ self.d_mat) @ self.b_mat) + np.linalg.inv(eta)
         return np.linalg.inv(c_inv)  # return C by taking the inverse of c_inv
 
     def get_theta(self):  # theta looks like a fancy "v" with a curl on the right side (for reference to the note)
         constructor1 = np.asarray(self.init_data)[1:]
         constructor2 = np.asarray(self.init_data)[:-1]
         theta = constructor1 - constructor2
-        return theta
+        self.theta = theta
+        return
 
     # outputs the vector of mean values for each beta_i
-    @staticmethod
-    def get_mu_vector(c_mat, b_int, d_mat, theta):
-        mu = c_mat @ b_int.T @ d_mat @ theta
+    def get_mu_vector(self, c_mat):
+        mu = c_mat @ self.b_mat.T @ self.d_mat @ self.theta
         return mu
 
-    def run_gibbs(self, verbose=True, matrix_calc='chunked'):
+    def run_gibbs(self, verbose=True):
         a_loc = self._local_gig_a  # lambda
         b_loc = self._local_gig_b  # lambda
         p_loc = self._local_gig_p  # lambda
@@ -362,16 +379,7 @@ class FredholmGlobLoc:
         print('a_loc', a_loc, 'b_loc', b_loc, 'p loc', p_loc)
         print('a_glob', a_glob, 'b_glob', b_glob, 'p glob', p_glob)
 
-        if matrix_calc == 'chunked':
-            b_int = self.get_b_integral_v_chunked()
-        elif matrix_calc == 'long':
-            b_int = self.get_b_integral()
-        elif matrix_calc == 'scipy':
-            b_int = self.get_b_integral_scipy()
-        else:
-            raise AttributeError
-
-        d_mat = self.get_diagonal_matrix()
+        # b_int is already initialized because it is defined in the initialization of get_optimal_beta
         data_len = len(self.init_data)
 
         # initialize tau (semi-randomly)
@@ -385,7 +393,6 @@ class FredholmGlobLoc:
         # randomly initialize beta
         beta = np.random.normal(0, 0.05, data_len - 1)  # a vector (beta coeffs)
         lambda_mat = np.identity(data_len - 1)
-        theta = self.get_theta()
 
         for i in range(self.gibbs_iters):
             # draw a diagonal matrix of lambda^2
@@ -400,8 +407,8 @@ class FredholmGlobLoc:
 
             # now, using these, we sample beta
             eta = self.get_eta(lambda_mat, tau)
-            c_mat = self.get_c_mat(b_int, d_mat, eta)  # covariance matrix of beta
-            mu = self.get_mu_vector(c_mat, b_int, d_mat, theta)  # mean vector of beta
+            c_mat = self.get_c_mat(eta)  # covariance matrix of beta
+            mu = self.get_mu_vector(c_mat)  # mean vector of beta
             # the beta comes from a multivariate normal
             beta = np.random.multivariate_normal(mu, c_mat)
 
@@ -411,6 +418,24 @@ class FredholmGlobLoc:
                     print(f'step {i}/{self.gibbs_iters} completed')
             self.lambda_mat_record.append(lambda_mat)
             self.beta_record.append(beta)
+
+    def get_optimal_beta(self):
+        matrix_calc = self.matrix_calc_method
+        if matrix_calc == 'chunked':
+            self.get_b_integral_v_chunked()
+        elif matrix_calc == 'long':
+            self.get_b_integral()
+        elif matrix_calc == 'scipy':
+            self.get_b_integral_scipy()
+        else:
+            raise AttributeError
+
+        self.get_theta()
+        self.get_diagonal_matrix()
+        data_len = len(self.init_data) - 1
+        c_mat = self.get_c_mat(eta=np.eye(data_len) * self.optimization_lambda)
+        optimal_beta = c_mat @ self.b_mat.T @ self.d_mat @ self.theta
+        return optimal_beta
 
 
 def multiplicative_exponential_kernel(x, y):
@@ -447,6 +472,9 @@ def multiplicative_exponential_kernel(x, y):
 
 
 class FredholmOptimize:
+    """
+    Deprecated
+    """
     def __init__(self,
                  init_data,
                  known_b,  # this should be a function that is compatible with matrix versions of th operation
@@ -541,7 +569,8 @@ class FredholmOptimize:
         constructor1 = np.asarray(self.init_data)[1:]
         constructor2 = np.asarray(self.init_data)[:-1]
         theta = constructor1 - constructor2
-        return theta
+        self.theta = theta
+        return
 
     def optimize_c(self, matrix_calc='chunked', **kwargs):
         if matrix_calc == 'chunked':
@@ -549,12 +578,12 @@ class FredholmOptimize:
         elif matrix_calc == 'long':
             b_int = self.get_b_integral()
         d_mat = self.get_diagonal_matrix()
-        theta = self.get_theta()
+        self.get_theta()
         dt = self.t_delta
 
         def f(c):
             part1 = dt * (c.T @ b_int.T @ d_mat @ b_int @ c)
-            part2 = 2 * (theta.T @ d_mat @ b_int @ c)
+            part2 = 2 * (self.theta.T @ d_mat @ b_int @ c)
             part3 = np.linalg.norm(c)
             return part1 - part2 + part3
 

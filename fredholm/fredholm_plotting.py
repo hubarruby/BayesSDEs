@@ -76,13 +76,12 @@ def plot_data_histogram(dict_list, **kwargs):
 
 
 def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bbar_integral=True, integral_n=5000,
-                        bbar_manual=None, bbar_manual_name=None, y_lim=None):
+                        bbar_manual=None, bbar_manual_name=None, y_lim=None, optimal_beta=True):
     """
     Plots the estimated b_bar using the betas in each results dictionary, comparing with the true function.
     Assumes that all data being passed in the main input list require the same b_mat (use the same init_data and b)
     :param dict_list:  a list of dictionaries to iterate on, which were generated from the fredholm_simulation.py file
     :param b_mat: calculated from fredholm_utils.estimated_b_function_matrix
-    :param include_true_func: 
     :param beta_idx: 
     :param range_linspace:
     "param bbar_integral (bool): if True, this function will numerically integrate (using the b function and pi
@@ -105,16 +104,25 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
 
     # assumes that len(init_data) is the same across the different entires of the list
     linspace_size = len(dict_list[0]['init_data']) - 1
-    x_vals=np.linspace(range_linspace[0], range_linspace[1], linspace_size)
+    x_vals = np.linspace(range_linspace[0], range_linspace[1], linspace_size)
 
-    for data_dict in dict_list:
+    for i, data_dict in enumerate(dict_list):
         meta = data_dict["meta_data"]
+        # if optimal_bet, then we are plotting the estimate using the optimal (not-gig-estimated) beta values
+        # only do this on the very first entry, assuming all entries have the same init_data
+        # also, check that the saved results have an 'optimal_beta', since this functionality was added later on
+        if optimal_beta and i == 0 and 'optimal_beta' in data_dict.keys():
+            plt.scatter(x_vals, estimated_b_function_mat_calc(b_mat, data_dict['optimal_beta']), alpha = 0.6,
+                        s=0.5, label=f'Func: {data_dict["known_b"].__name__}, Optimal betas from data'
+                                     f'Kurt: {kurtosis(data_dict["optimal_beta"]):.1f}')
+
         # quick check if there are any global parameters to worry about plotting
         if meta["global_gig_a"] == meta["global_gig_b"] == meta["global_gig_p"] == 0:
             plt.scatter(x_vals, estimated_b_function_mat_calc(b_mat, data_dict['beta_record'][beta_idx]), alpha = 0.6,
                         s=0.5, label=f'Func: {data_dict["known_b"].__name__}, Loc: {meta["local_gig_a"]}, '
                                      f'{meta["local_gig_b"]}, {meta["local_gig_p"]}, '
                                      f'Kurt: {kurtosis(data_dict["beta_record"][beta_idx]):.1f}')
+        # if not global gig parameters, then reduce the size of the labels by using the plot below:
         else:
             plt.scatter(x_vals, estimated_b_function_mat_calc(b_mat, data_dict['beta_record'][beta_idx]), alpha = 0.6,
                         s=0.5, label=f'Func: {data_dict["known_b"].__name__}, Loc: {meta["local_gig_a"]}, '
@@ -142,6 +150,7 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
         integral_estimated_bbar = b_bar_v(x=x_vals, pi=pi, b=dict_list[-1]['known_b'], integral_n=integral_n)
         plt.scatter(x_vals, integral_estimated_bbar, alpha = 0.6, s=0.5,
                     label=f"Integration Estimate of {dict_list[-1]['known_b'].__name__}")
+
     if y_lim:
         plt.ylim(y_lim)
     plt.legend()
