@@ -76,7 +76,7 @@ def plot_data_histogram(dict_list, **kwargs):
 
 
 def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bbar_integral=True, integral_n=5000,
-                        bbar_manual=None, bbar_manual_name=None, y_lim=None, optimal_beta=True):
+                        bbar_manual=None, bbar_manual_name=None, y_lim=None, x_lim=None, optimal_beta="y"):
     """
     Plots the estimated b_bar using the betas in each results dictionary, comparing with the true function.
     Assumes that all data being passed in the main input list require the same b_mat (use the same init_data and b)
@@ -95,6 +95,7 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
                     return x_vals + E_y - x_vals**3 - (3*x_vals**2)*E_y - 3*x_vals*E_y2 - E_y3
     :param bbar_manual_name (str): legend label for the plot of bbar_manual
         Example: "x_vals + E_y - x_vals**3 - (3*x_vals**2)*E_y - 3*x_vals*E_y2 - E_y3"
+    :param optimal_beta (str): can be "y", "n", or "only"
     # todo :param mse (str): if 'integral', the function calculates and reports the MSE between the numerically estimated
     integral bbar_integral and the beta estimates from each item in the dict_list.
     If 'manual', the function calculates and reports the MSE between the manually computed function bbar_manual and the beta
@@ -111,11 +112,17 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
         # if optimal_bet, then we are plotting the estimate using the optimal (not-gig-estimated) beta values
         # only do this on the very first entry, assuming all entries have the same init_data
         # also, check that the saved results have an 'optimal_beta', since this functionality was added later on
-        if optimal_beta and i == 0 and 'optimal_beta' in data_dict.keys():
+        if (optimal_beta.lower() == 'y' or 'only') and (i == 0) and ('optimal_beta' in data_dict.keys()):
             plt.scatter(x_vals, estimated_b_function_mat_calc(b_mat, data_dict['optimal_beta']), alpha = 0.6,
-                        s=0.5, label=f'Func: {data_dict["known_b"].__name__}, Optimal betas from data'
+                        s=0.5, label=f'Func: {data_dict["known_b"].__name__}, Optimal betas from data, '
                                      f'Kurt: {kurtosis(data_dict["optimal_beta"]):.1f}')
-
+            if optimal_beta.lower() == 'only':
+                if y_lim:
+                    plt.ylim(y_lim)
+                if x_lim:
+                    plt.xlim(x_lim)
+                plt.legend()
+                plt.show()
         # quick check if there are any global parameters to worry about plotting
         if meta["global_gig_a"] == meta["global_gig_b"] == meta["global_gig_p"] == 0:
             plt.scatter(x_vals, estimated_b_function_mat_calc(b_mat, data_dict['beta_record'][beta_idx]), alpha = 0.6,
@@ -153,6 +160,8 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
 
     if y_lim:
         plt.ylim(y_lim)
+    if x_lim:
+        plt.xlim(x_lim)
     plt.legend()
     plt.show()
 
