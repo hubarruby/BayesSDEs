@@ -3,7 +3,7 @@ from scipy.stats import truncnorm, beta
 import pickle
 import os
 
-from helpers.utils import str2bool
+from helpers.utils import str2bool, construct_pi
 from .fredholm_datagen_utils import *
 from .fredholm_utils import FredholmGlobLoc
 

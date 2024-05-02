@@ -1,6 +1,39 @@
 import numpy as np
 import argparse
 from scipy.stats import geninvgauss, gamma, invgamma
+from scipy import stats
+
+def construct_pi(spec_str):
+    """
+    Takes a string of specifications and returns a scipy rv_continuous object according to the specs.
+    :param spec_str: A string specifying the distribution and its parameters.
+    :return: A scipy.stats rv_continuous object.
+
+    Example: "truncnorm -31.94 31.30 loc=1 scale=3.16" returns a scipy rv_continuous class for the truncated normal,
+    instantiated by the code stats.truncnorm(-31.94, 31.30, loc=1, scale=3.16).
+    """
+    # Splitting the input string into components
+    parts = spec_str.split()
+    dist_name = parts[0]  # The distribution name
+    args = []
+    kwargs = {}
+
+    # Parsing the remaining parts for arguments and keyword arguments
+    for param in parts[1:]:
+        if '=' in param:
+            key, value = param.split('=')
+            kwargs[key] = float(value)
+        else:
+            args.append(float(param))
+
+    # Dynamically getting the distribution class from scipy.stats
+    try:
+        dist_class = getattr(stats, dist_name)
+    except AttributeError:
+        raise ValueError(f"Unsupported distribution: {dist_name}")
+
+    # Creating the distribution object with parsed parameters
+    return dist_class(*args, **kwargs)
 
 
 def str2bool(v):
