@@ -141,6 +141,11 @@ for number in "$@"; do
             python -m fredholm.fredholm_simulation --results_filepath "fredholm/fredholm_results/results19/gig01_01_-1_b_gamma1_pibeta_smally_multiexp.pkl" --kernel_name 'mult_exp' --b_function "b_gamma1" --pi beta --beta_distribution_a 3 --beta_distribution_b 2 --y_domain -10 10 --gibbs_iters 25 --t_end 100 --start_val 0.5 --chunk_size 300 --matrix_calc "chunked" --local_gig_a 0.1 --local_gig_b 0.1 --local_gig_p -1 --global_gig_a 0 --global_gig_b 0 --global_gig_p 0
             python -m fredholm.fredholm_simulation --results_filepath "fredholm/fredholm_results/results19/gig01_05_-3_b_gamma1_pibeta_smally_multiexp.pkl" --kernel_name 'mult_exp' --b_function "b_gamma1" --pi beta --beta_distribution_a 3 --beta_distribution_b 2 --y_domain -10 10 --gibbs_iters 25 --t_end 100 --start_val 0.5 --chunk_size 300 --matrix_calc "chunked" --local_gig_a 0.1 --local_gig_b 0.5 --local_gig_p -3 --global_gig_a 0 --global_gig_b 0 --global_gig_p 0
             ;;
+        20) # running long t_end and avoiding running the gibbs process; only finding optimal beta (c) coefficients
+            echo "Running simulation set 20"
+            python -m fredholm.fredholm_simulation --results_filepath "fredholm/fredholm_results/results20/b2_T50_diff1_smally.pkl" --b_function "b2" --y_domain -10 10 --gibbs_iters 25 --t_end 50 --chunk_size 500 --start_val 0.3 --matrix_calc "chunked" --diffusion 1 --global_gig_p 0 --run_gibbs False
+            python -m fredholm.fredholm_simulation --results_filepath "fredholm/fredholm_results/results20/b_gamma1_T50_diff1_smally.pkl" --b_function "b_gamma1" --y_domain -10 10 --gibbs_iters 25 --t_end 50 --chunk_size 500 --start_val 0.3 --matrix_calc "chunked" --diffusion 1 --global_gig_p 0 --run_gibbs False
+            ;;
         *)
             echo "Warning: No simulations are set up for number $number. Please use a number from 0 to 15."
             ;;
