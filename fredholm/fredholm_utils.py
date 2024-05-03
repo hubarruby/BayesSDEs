@@ -100,7 +100,7 @@ def estimated_b_function_matrix(range_linspace, init_data, kernel_name, known_b,
     """
     function for computing the matrix for estimate b_mat, over a particular linspace
         (usually for plotting/MSE calculation purposes)
-    :param range_linspace:
+    :param range_linspace: (tuple)
     :param init_data:
     :param kernel_name: 'gauss' or 'mult_exp'
     :param known_b:
