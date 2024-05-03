@@ -1,11 +1,11 @@
 import argparse
-from scipy.stats import truncnorm, beta
 import pickle
 import os
 
 from helpers.utils import str2bool, construct_pi
 from .fredholm_datagen_utils import *
 from .fredholm_utils import FredholmGlobLoc
+
 
 def parse_args():
     """
@@ -21,20 +21,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Run the Fredholm simulation with configurable parameters.")
     parser.add_argument('--results_filepath', type=str, required=True,
                         help='filepath to save the results (should be a .pkl).')
-    parser.add_argument('--pi', type=str, default='truncnorm',
-                        help='Name of the distribution to be used for pi (can be either "truncnorm" or "beta".')
-    parser.add_argument('--scale', type=float, default=np.sqrt(10),
-                        help='Scale for the truncnorm distribution, when pi is a truncated normal.')
-    parser.add_argument('--loc', type=float, default=1,
-                        help='Location for the truncnorm distribution, when pi is a truncated normal.')
-    parser.add_argument('--a_trunc', type=float, default=-100,
-                        help='Lower bound for truncation, when pi is a truncated normal.')
-    parser.add_argument('--b_trunc', type=float, default=100,
-                        help='Upper bound for truncation, when pi is a truncated normal.')
-    parser.add_argument('--beta_distribution_a', type=float, default=3,
-                        help='"a" parameter for when pi is a beta distribution.')
-    parser.add_argument('--beta_distribution_b', type=float, default=2,
-                        help='"b" parameter for when pi is a beta distribution.')
+    parser.add_argument('--pi_name', type=str, default='truncnorm -31.94 31.30 loc=1 scale=3.16',
+                        help='The scipy.stats distribution name, and its parameters, all as a string separated '
+                             'by spaces. Default is a truncated normal with peak at 1 and variance 10, truncated at '
+                             '-100 and 100.')
     parser.add_argument('--diffusion', type=float, default=1, help='Diffusion coefficient.')
     parser.add_argument('--t_delta', type=float, default=0.05, help='Time delta.')
     parser.add_argument('--t_end', type=float, default=100, help='End time.')
@@ -85,13 +75,7 @@ class FredSimulation:
 
     Attributes:
         results_filepath (str): Path where the simulation results will be saved.
-        pi (str): Name of the distribution to be used for pi. Can be either "truncnorm" (default) or "beta".
-        scale (float): Scale parameter for the truncated normal distribution used for generating data.
-        loc (float): Location parameter for the truncated normal distribution used for generating data.
-        a_trunc (float): Lower bound for the truncation for the normal used for generating data.
-        b_trunc (float): Upper bound for the truncation for the normal used for generating data.
-        beta_distribution_a (float): "a" parameter for when pi is a beta distribution.
-        beta_distribution_b (float): "b" parameter for when pi is a beta distribution.
+        pi_name (str): The scipy.stats distribution name, and its parameters, all as a string separated by spaces.
         diffusion (float): Diffusion coefficient of the SDE.
         t_delta (float): Time delta for simulation steps.
         t_end (float): Ending time for the simulation.
@@ -110,7 +94,7 @@ class FredSimulation:
         p_glob (float): 'p' parameter for global GIG distribution on the learned parameters.
         kernel_name (str): Name of the kernel function used.
         timer (bool): Whether to display time estimates throughout the simulation
-        matrix_calc (str): method for caluclation the numeric integration of b.
+        matrix_calc (str): method for calculation the numeric integration of b.
             Can be 'chunked', 'long', or 'scipy'.
             Use chunked for faster and less precise b matrix integration estimates,
             and scipy for more-precise and slower estimates.
@@ -119,24 +103,16 @@ class FredSimulation:
     Methods:
         run_simulation: Executes the simulation and saves the results.
     """
-    def __init__(self, results_filepath, pi='truncnorm', scale=np.sqrt(10), loc=1, a_trunc=-100, b_trunc=100,
-                 beta_distribution_a=3, beta_distribution_b=2, diffusion=1, t_delta=0.05, t_end=100, start_val=0,
-                 gibbs_iters=40, chunk_size=150, integral_n=5000, y_domain=(-100, 100), b=b1, a_loc=2, b_loc=0,
-                 p_loc=1, a_glob=2, b_glob=0, p_glob=1, kernel_name='gauss', timer=True, matrix_calc='scipy',
-                 optimization_lambda=1, run_gibbs=True):
+    def __init__(self, results_filepath, pi_name='truncnorm -31.94 31.30 loc=1 scale=3.16', diffusion=1, t_delta=0.05,
+                 t_end=100, start_val=0, gibbs_iters=40, chunk_size=150, integral_n=5000, y_domain=(-100, 100), b=b1,
+                 a_loc=2, b_loc=0, p_loc=1, a_glob=2, b_glob=0, p_glob=1, kernel_name='gauss', timer=True,
+                 matrix_calc='scipy', optimization_lambda=1, run_gibbs=True):
         """
         Initialize a simulation instance with specified parameters for running Fredholm SDE learning simulations.
 
         Parameters:
             results_filepath (str): The file path where the simulation results will be stored.
-            pi (str): Name of the distribution to be used for pi. Can be either "truncnorm" (default) or "beta".
-            scale (float): The scale parameter for the truncated normal distribution used for data generation.
-            loc (float): The location parameter for the truncated normal distribution used for data generation.
-            a_trunc (float): The lower bound for truncation in the truncated normal distribution used for data
-            generation.
-            b_trunc (float): The upper bound for truncation in the distribution used for data generation.
-            beta_distribution_a (float): "a" parameter for when pi is a beta distribution.
-            beta_distribution_b (float): "b" parameter for when pi is a beta distribution.
+            pi_name (str): The scipy.stats distribution name, and its parameters, all as a string separated by spaces.
             diffusion (float): The diffusion coefficient of the SDE data.
             t_delta (float): The time delta or step size for the SDE.
             t_end (float): The end time of the generated data.
@@ -163,13 +139,7 @@ class FredSimulation:
         Sets up the Fredholm learning simulation environment based on the provided parameters, preparing for a run that
         can be executed using the method `run_simulation`.
         """
-        self.pi = pi
-        self.scale = scale
-        self.loc = loc
-        self.a_trunc = a_trunc
-        self.b_trunc = b_trunc
-        self.beta_distribution_a = beta_distribution_a
-        self.beta_distribution_b = beta_distribution_b
+        self.pi_name = pi_name
         self.diffusion = diffusion
         self.t_delta = t_delta
         self.t_end = t_end
@@ -200,13 +170,7 @@ class FredSimulation:
         FredholmGlobLoc object, and finally, saves the results to the specified file path.
         """
         np.random.seed(0)
-        if self.pi == 'truncnorm':
-            a_trunc_real, b_trunc_real = (self.a_trunc - self.loc) / self.scale, (self.b_trunc - self.loc) / self.scale
-            pi = truncnorm(a_trunc_real, b_trunc_real, loc=self.loc, scale=self.scale)
-        elif self.pi == 'beta':
-            pi = beta(self.beta_distribution_a, self.beta_distribution_b)
-        else:
-            raise AttributeError
+        pi = construct_pi(self.pi_name)
 
         init_data = create_data(self.diffusion, b_bar, t_delta=self.t_delta, t_end=self.t_end, start_val=self.start_val,
                                 pi=pi, b=self.b, integral_n=self.integral_n)
@@ -233,9 +197,7 @@ class FredSimulation:
             fred_glob_loc_obj.run_gibbs()
 
         fred_results_dict = dict(
-            meta_data=dict(pi=self.pi, scale=self.scale, loc=self.loc, a_trunc=self.a_trunc, b_trunc=self.b_trunc,
-                           beta_distribution_a=self.beta_distribution_a, beta_distribution_b=self.beta_distribution_b,
-                           diffusion=self.diffusion, t_delta=self.t_delta, t_end=self.t_end,
+            meta_data=dict(pi_name=self.pi_name, diffusion=self.diffusion, t_delta=self.t_delta, t_end=self.t_end,
                            start_val=self.start_val, gibbs_iters=self.gibbs_iters, chunk_size=self.chunk_size,
                            integral_n=self.integral_n, y_domain=self.y_domain, results_filepath=self.results_filepath,
                            local_gig_a=self._local_gig_a, local_gig_b=self._local_gig_b, local_gig_p=self._local_gig_p,
@@ -262,13 +224,7 @@ def main():
 
     simulation = FredSimulation(
         results_filepath=args.results_filepath,
-        pi=args.pi,
-        scale=args.scale,
-        loc=args.loc,
-        a_trunc=args.a_trunc,
-        b_trunc=args.b_trunc,
-        beta_distribution_a=args.beta_distribution_a,
-        beta_distribution_b=args.beta_distribution_b,
+        pi_name=args.pi_name,
         diffusion=args.diffusion,
         t_delta=args.t_delta,
         t_end=args.t_end,

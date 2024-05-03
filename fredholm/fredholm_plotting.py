@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import pickle
-from scipy.stats import kurtosis, beta, truncnorm
+from scipy.stats import kurtosis
 import pandas as pd
 import sympy as sp
 
 from fredholm_datagen_utils import *
 from fredholm_utils import *
+from helpers.utils import construct_pi
 
 
 def get_results_dictionaries(filename_list, dirpath='fredholm_results/'):
@@ -147,13 +148,7 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
         # using the last entry in dict_list to see what the distribution was for generating the data
         # careful: the above comment (and code below) implies that this part of the function assumes that the
         # distribution used to generate each of the dictionaries in dict_list was the same pi distribution.
-        if meta['pi'] == 'truncnorm':
-            a_trunc_real, b_trunc_real = (meta['a_trunc'] - meta['loc']) / meta['scale'], (meta['b_trunc'] - meta['loc']) / meta['scale']
-            pi = truncnorm(a_trunc_real, b_trunc_real, loc=meta['loc'], scale=meta['scale'])
-        elif meta['pi'] == 'beta':
-            pi = beta(meta['beta_distribution_a'], meta['beta_distribution_b'])
-        else:
-            raise AttributeError
+        pi = construct_pi(meta['pi_name'])
         integral_estimated_bbar = b_bar_v(x=x_vals, pi=pi, b=dict_list[-1]['known_b'], integral_n=integral_n)
         plt.scatter(x_vals, integral_estimated_bbar, alpha = 0.6, s=0.5,
                     label=f"Integration Estimate of {dict_list[-1]['known_b'].__name__}")
