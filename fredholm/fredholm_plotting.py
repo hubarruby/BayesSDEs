@@ -124,6 +124,7 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
                     plt.xlim(x_lim)
                 plt.legend()
                 plt.show()
+
         # quick check if there are any global parameters to worry about plotting
         if meta["global_gig_a"] == meta["global_gig_b"] == meta["global_gig_p"] == 0:
             plt.scatter(x_vals, estimated_b_function_mat_calc(b_mat, data_dict['beta_record'][beta_idx]), alpha = 0.6,
@@ -140,9 +141,9 @@ def plot_bbar_estimates(dict_list, b_mat, beta_idx=-1, range_linspace=(-5,5), bb
 
     if bbar_manual:
         if bbar_manual_name:
-            plt.scatter(x_vals, bbar_manual(x_vals), alpha = 0.6, s=0.5, label=bbar_manual_name)
+            plt.scatter(x_vals, bbar_manual(x_vals), alpha=0.6, s=0.5, label=bbar_manual_name)
         else:
-            plt.scatter(x_vals, bbar_manual(x_vals), alpha = 0.6, s=0.5, label='Manual Function Estimate')
+            plt.scatter(x_vals, bbar_manual(x_vals), alpha=0.6, s=0.5, label='Manual Function Estimate')
 
     if bbar_integral:
         # using the last entry in dict_list to see what the distribution was for generating the data
